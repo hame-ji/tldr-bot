@@ -1,0 +1,79 @@
+name: digest
+
+on:
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      test_push:
+        description: "Create a CI smoke commit"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: digest-pipeline
+  cancel-in-progress: false
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Validate required secrets
+        run: |
+          test -n "$TELEGRAM_BOT_TOKEN"
+          test -n "$TELEGRAM_CHAT_ID"
+          test -n "$GEMINI_API_KEY"
+
+      - name: Validate Telegram bot token and clear webhook
+        run: |
+          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" >/tmp/getme.json
+          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook?drop_pending_updates=true" >/tmp/delete_webhook.json
+
+      - name: Validate polling endpoint
+        run: |
+          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?limit=1&timeout=0" >/tmp/getupdates.json
+
+      - name: Run pipeline entrypoint
+        run: python src/main.py
+
+      - name: Optional push smoke test
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.test_push == 'true' }}
+        run: |
+          python - <<'PY'
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          path = Path("data/.ci-smoke.log")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          with path.open("a", encoding="utf-8") as file:
+              file.write(f"{datetime.now(timezone.utc).isoformat()} workflow push smoke test\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/.ci-smoke.log
+          if ! git diff --staged --quiet; then
+            git commit -m "chore: workflow push smoke test"
+            git push
+          fi

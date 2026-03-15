@@ -22,7 +22,7 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Infrastructure & Bot Setup | 0/? | Not started | - |
+| 1. Infrastructure & Bot Setup | 2/3 | In progress | - |
 | 2. Telegram Polling Client | 0/? | Not started | - |
 | 3. Content Fetching | 0/? | Not started | - |
 | 4. Gemini Summarization | 0/? | Not started | - |
@@ -42,7 +42,10 @@
   2. GitHub Secrets (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GEMINI_API_KEY`) are set and the bot token is confirmed valid via a live BotFather test
   3. `digest.yml` workflow runs successfully (manually dispatched), authenticates with `GITHUB_TOKEN`, and can push a test commit to the repo
   4. `getUpdates` returns real messages (not an empty array), confirming no active webhook is blocking polling
-**Plans:** TBD
+**Plans:** 3 plans
+- [x] `01-01-PLAN.md` — Scaffold required directories and pin exact dependencies
+- [x] `01-02-PLAN.md` — Create workflow triggers and CI guardrails (permissions, checkout, concurrency)
+- [ ] `01-03-PLAN.md` — Wire secrets and complete Telegram setup validation checkpoint
 
 ### Phase 2: Telegram Polling Client
 **Goal:** The pipeline can retrieve new Telegram messages, extract URLs from message text, filter by chat ID, and correctly persist the polling offset so no message is processed twice.

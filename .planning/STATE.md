@@ -1,7 +1,7 @@
 # Project State: Telegram Research Digest Bot
 
 **Last updated:** 2026-03-15
-**Session:** Initialization — roadmap created
+**Session:** Phase 1 execution in progress
 
 ---
 
@@ -18,8 +18,8 @@
 ## Current Position
 
 **Current phase:** Phase 1 — Infrastructure & Bot Setup
-**Current plan:** None (not started)
-**Status:** Not started
+**Current plan:** `01-03` checkpoint (manual credential setup)
+**Status:** In progress (blocked on external setup)
 
 ```
 Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
@@ -37,8 +37,8 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 | Phases total | 6 |
 | Phases complete | 0 |
 | Requirements mapped | 34/34 |
-| Plans created | 0 |
-| Plans complete | 0 |
+| Plans created | 3 |
+| Plans complete | 2 |
 
 ---
 
@@ -91,7 +91,7 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 
 ## Blockers
 
-None.
+- Manual setup required: Telegram bot/token + GitHub Secrets + Gemini API key before live workflow verification can pass (see `.planning/phases/01-infrastructure-bot-setup/01-USER-SETUP.md`).
 
 ---
 
@@ -100,7 +100,8 @@ None.
 ### To resume this project:
 1. Read `.planning/ROADMAP.md` — current phase and success criteria
 2. Read `.planning/STATE.md` (this file) — decisions, pitfalls, todos
-3. Run `/gsd-plan-phase 1` to begin Phase 1 planning
+3. Complete manual setup checklist in `.planning/phases/01-infrastructure-bot-setup/01-USER-SETUP.md`
+4. Run workflow dispatch for `digest` with `test_push=true` and verify `getMe`, `deleteWebhook`, `getUpdates` steps pass
 
 ### Planning artifacts:
 - `.planning/PROJECT.md` — project goals and constraints

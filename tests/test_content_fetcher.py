@@ -13,6 +13,12 @@ class ContentFetcherTests(unittest.TestCase):
         self.assertEqual(classify_url("https://youtu.be/abc"), "youtube")
         self.assertEqual(classify_url("https://example.com/article"), "article")
 
+    def test_fetch_url_youtube_is_ignored(self) -> None:
+        result = fetch_url("https://youtu.be/abc")
+
+        self.assertEqual(result["status"], "ignored")
+        self.assertEqual(result["kind"], "youtube")
+
     @patch("src.content_fetcher.trafilatura.extract")
     @patch("src.content_fetcher.requests.get")
     def test_fetch_url_article_uses_timeout_and_extract(self, mock_get, mock_extract) -> None:

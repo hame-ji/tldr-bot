@@ -1,6 +1,6 @@
 # Architecture Design Document - Telegram Research Digest Bot
 
-> A serverless, zero-infrastructure personal knowledge pipeline built on GitHub Actions, Telegram, and Gemini.
+> A serverless, zero-infrastructure personal knowledge pipeline built on GitHub Actions, Telegram, and OpenRouter.
 
 ---
 
@@ -50,8 +50,8 @@ User -> Telegram Bot
    |-- Filter by ALLOWED_CHAT_ID
    |-- Extract & normalize URLs
    |-- For each URL:
-   |   |-- Detect type (article / YouTube)
-   |   |-- Fetch or pass content to Gemini
+   |   |-- Detect type (article / non-article)
+   |   |-- Fetch article content or ignore non-article URLs
    |   |-- Generate summary -> write data/sources/YYYY-MM-DD/slug.md
    |   `-- On failure -> write data/failed/YYYY-MM-DD/slug.md
    |-- Generate digest -> write data/digests/YYYY-MM-DD.md
@@ -130,13 +130,13 @@ The workflow follows three guardrails:
 
 ---
 
-### 6. Transcript-grounded YouTube summarization
+### 6. Article-only summarization scope
 
-**Decision:** YouTube videos are summarized from transcripts fetched with `youtube-transcript-api`, then sent to OpenRouter free models for summarization.
+**Decision:** Only article URLs are summarized. Non-article URLs (including YouTube) are silently ignored in v1.
 
-**Alternative considered:** Native model URL summarization without transcript fetch.
+**Alternative considered:** YouTube transcript extraction and model-native video summarization paths.
 
-**Why we didn't:** Native URL summarization can return plausible but weakly-grounded outputs. Transcript grounding gives verifiable input text, deterministic fail behavior when transcripts are unavailable, and stronger content fidelity.
+**Why we didn't:** Reliable video summarization from GitHub-hosted runners requires either paid proxy infrastructure or lower-trust model behavior. Article-only scope preserves zero-cost operation and keeps output quality predictable.
 
 ---
 
@@ -158,7 +158,7 @@ These are known limitations explicitly accepted for this version. They are not o
 |---|---|
 | No cross-day URL deduplication | Same URL on two days is rare; two summaries is harmless; the fix (a URL index file) is additive when needed |
 | No on-demand digest from Telegram | Requires a persistent process or webhook; incompatible with the serverless constraint; manual dispatch from GitHub UI is sufficient |
-| Gemini free-tier rate limits | 1-10 URLs/day is well within limits; if usage grows, the API client is the only thing that changes |
+| Non-article URLs are ignored in v1 | Keeps pipeline zero-cost and predictable; video support can be added later behind optional paid infrastructure |
 | Retry complexity and backoff tuning | Retries with exponential backoff are implemented for 429/resource exhaustion, but daily run volume is low so defaults remain intentionally conservative |
 | Partial results on mid-run API failure | Acceptable for a personal digest; the committed partial state is better than nothing |
 

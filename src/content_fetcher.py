@@ -86,7 +86,7 @@ def write_failure_record(
 def fetch_url(url: str, failed_base_dir: str = "data/failed") -> Dict[str, Any]:
     kind = classify_url(url)
     if kind == "youtube":
-        return {"status": "ok", "kind": "youtube", "url": url}
+        return {"status": "ignored", "kind": "youtube", "url": url}
 
     try:
         content = fetch_article_text(url)

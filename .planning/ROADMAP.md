@@ -12,7 +12,7 @@
 - [ ] **Phase 1: Infrastructure & Bot Setup** - Repo scaffold, GitHub Secrets, verified bot token, and workflow that can push commits
 - [ ] **Phase 2: Telegram Polling Client** - Correct offset-based polling with state.json persistence and ALLOWED_CHAT_ID filtering
 - [ ] **Phase 3: Content Fetching** - URL classification, article extraction via trafilatura, timeout safety, and failure records
-- [ ] **Phase 4: OpenRouter Summarization** - AI summarization for articles and transcript-grounded YouTube inputs with prompt file control and rate-limit resilience
+- [ ] **Phase 4: OpenRouter Summarization** - AI summarization for article content with prompt file control and rate-limit resilience
 - [x] **Phase 5: Digest Generation & Delivery** - Daily digest assembled and chunked for Telegram delivery, with failure section and empty-day guard
 - [x] **Phase 6: Pipeline Orchestration & Git Integration** - Full pipeline wired via main.py, amend-or-create commit strategy, and end-to-end verified run
 
@@ -39,7 +39,7 @@
 **Requirements:** INFRA-01, INFRA-02, INFRA-03, INFRA-04, INFRA-05, INFRA-06, INFRA-07, BOT-01, BOT-02, BOT-03
 **Success Criteria** (what must be TRUE):
   1. `data/`, `prompts/`, and `src/` directories exist in the repository and `requirements.txt` pins exact versions of all five dependencies
-  2. GitHub Secrets (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GEMINI_API_KEY`) are set and the bot token is confirmed valid via a live BotFather test
+  2. GitHub Secrets (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `OPENROUTER_API_KEY`) are set and the bot token is confirmed valid via a live BotFather test
   3. `digest.yml` workflow runs successfully (manually dispatched), authenticates with `GITHUB_TOKEN`, and can push a test commit to the repo
   4. `getUpdates` returns real messages (not an empty array), confirming no active webhook is blocking polling
 **Plans:** 3 plans
@@ -61,11 +61,11 @@
 - [x] `02-02-PLAN.md` — Add URL extraction/chat filtering tests and wire polling into entrypoint/CI
 
 ### Phase 3: Content Fetching
-**Goal:** The pipeline can classify a URL as article or YouTube, fetch and extract article content via trafilatura with mandatory timeouts, and write a failure record for any URL that cannot be fetched — without aborting the pipeline.
+**Goal:** The pipeline can classify incoming URLs, fetch and extract article content via trafilatura with mandatory timeouts, silently ignore YouTube URLs, and write a failure record for article fetch failures without aborting the pipeline.
 **Depends on:** Phase 2
 **Requirements:** FETCH-01, FETCH-02, FETCH-03, FETCH-04
 **Success Criteria** (what must be TRUE):
-  1. A valid article URL returns extracted main-body text (not HTML boilerplate); a YouTube URL is classified separately and not passed to trafilatura
+  1. A valid article URL returns extracted main-body text (not HTML boilerplate); a YouTube URL is silently ignored and not passed to trafilatura
   2. A URL that times out (or returns 403/paywall/empty content) produces a Markdown file in `data/failed/YYYY-MM-DD/slug.md` and the fetcher returns control to the caller — the pipeline does not abort
   3. All HTTP requests complete within the configured hard timeout (`timeout=(10, 30)`) — no request can hang indefinitely
 **Plans:** 2 plans
@@ -73,12 +73,12 @@
 - [x] `03-02-PLAN.md` — Add failure-record behavior and content fetcher tests
 
 ### Phase 4: OpenRouter Summarization
-**Goal:** The pipeline can summarize article text and transcript-grounded YouTube content via OpenRouter free models using prompt files, handle rate limits gracefully, and write each summary as a dated Markdown file.
+**Goal:** The pipeline can summarize article text via OpenRouter free models using prompt files, handle rate limits gracefully, and write each summary as a dated Markdown file.
 **Depends on:** Phase 3
 **Requirements:** SUM-01, SUM-02, SUM-03, SUM-04, SUM-05
 **Success Criteria** (what must be TRUE):
   1. A real article URL produces a summary written to `data/sources/YYYY-MM-DD/slug.md` using the behavior defined in `prompts/summarize.txt`
-  2. A YouTube URL is summarized from transcript text fetched with `youtube-transcript-api`; missing transcripts are written to `data/failed/`
+  2. Non-article URLs (including YouTube) are silently ignored and do not create summary or failure records
   3. When OpenRouter returns 429/rate-limit errors, the pipeline retries with backoff and model fallback and eventually succeeds (or writes to `data/failed/`) — it does not crash
   4. Changing `prompts/summarize.txt` changes the summary output without any code changes
 **Plans:** 2 plans

@@ -18,7 +18,7 @@ created: 2026-03-15
 | Requirement | Verification |
 |-------------|--------------|
 | SUM-01 | Unit tests verify article summary path writes output file via OpenRouter summarizer |
-| SUM-02 | Unit tests verify YouTube URL transcript extraction path and transcript-backed summarization flow |
+| SUM-02 | Unit tests verify non-article URLs are ignored and produce no summaries/failures |
 | SUM-03 | Prompt file exists and is loaded in summarizer runtime path |
 | SUM-04 | Unit tests verify source output file path under `data/sources/<date>/` |
 | SUM-05 | Summarizer implementation includes spacing + retry path for rate limits and free-model fallback ordering |
@@ -33,4 +33,4 @@ python src/main.py
 
 Expected:
 - Summary files appear under `data/sources/YYYY-MM-DD/`.
-- Any OpenRouter or transcript-access failure is recorded under `data/failed/YYYY-MM-DD/`.
+- Article summary appears under `data/sources/YYYY-MM-DD/` and YouTube URL is ignored (no summary/failure artifact).

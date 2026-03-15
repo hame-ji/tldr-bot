@@ -50,7 +50,7 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 |----------|-----------|
 | 6 phases despite "coarse" granularity setting | Each phase tests an independently verifiable external integration (Telegram, trafilatura, OpenRouter, Git); merging would mask which layer fails during debugging |
 | Polling offset committed before URL processing | POLL-04 / Pitfall 2: if pipeline crashes mid-run, offset must be persisted so next run doesn't reprocess same URLs |
-| `google-genai` not `google-generativeai` | `google-generativeai` is inactive since Nov 2025; explicitly pin `google-genai` in requirements.txt |
+| Article-only summarization scope | YouTube transcript access from CI is unreliable without paid proxy; v1 keeps zero-cost by silently ignoring non-article URLs |
 | `parse_mode="HTML"` for Telegram digest delivery | Avoid MarkdownV2 escaping fragility while preserving safe formatting with escaped dynamic text |
 
 ### Critical Pitfalls to Watch
@@ -61,11 +61,11 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 4. **requests without timeout** — Always `timeout=(10, 30)` -> Implemented in Phase 3
 5. **Telegram 4096-char limit** — Chunk on paragraph boundaries before sending -> Implemented in Phase 5
 6. **Webhook blocking getUpdates** — Run `deleteWebhook` during bot setup → Phase 1
-7. **SDK confusion** — Only `from google import genai`; never `google.generativeai` → Phase 1 (deps) + Phase 4
+7. **Non-article URL handling drift** — Keep YouTube/non-article URLs ignored end-to-end so they do not create failures or digest noise
 
 ### Research Flags
 
-- **Phase 4 (YouTube):** Use transcript-grounded summarization via `youtube-transcript-api`; fail closed when transcript is unavailable.
+- **Phase 4 (YouTube):** Non-article URLs are intentionally ignored in v1 article-only mode.
 - **Phase 4 (rate limits):** Free OpenRouter models can change/limit dynamically. Keep model discovery cache + retry/backoff enabled and verify fallback ordering in CI.
 - **Phase 5 (parse_mode):** Use `parse_mode="HTML"` with escaped dynamic text to avoid MarkdownV2 escaping complexity.
 
@@ -88,7 +88,7 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 - [x] Implement content fetching with timeout guards and failure records -> Phase 3
 - [x] Implement OpenRouter summarizer with prompt file control, retries, and source-file outputs -> Phase 4
 - [x] Implement digest generation, failed-URL section, and Telegram delivery chunking -> Phase 5
-- [ ] Run live verification for transcript-grounded YouTube processing on real input
+- [ ] Run live verification for article-only handling (YouTube URLs ignored, article summaries delivered)
 
 ---
 

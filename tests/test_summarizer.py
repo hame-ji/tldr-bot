@@ -3,24 +3,14 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from src.summarizer import (
-    _extract_youtube_video_id,
-    _fetch_youtube_transcript,
-    _order_models,
-    _source_output_path,
-    summarize_item,
-    summarize_items,
-)
+from src.summarizer import _order_models, _source_output_path, summarize_item, summarize_items
 
 
 class _FakeSummarizer:
     def summarize_article(self, url: str, content: str) -> str:
         return "article summary for " + url
-
-    def summarize_youtube(self, url: str) -> str:
-        return "youtube summary for " + url
 
 
 class SummarizerTests(unittest.TestCase):
@@ -42,12 +32,21 @@ class SummarizerTests(unittest.TestCase):
             self.assertEqual(result["status"], "ok")
             self.assertTrue(Path(result["summary_path"]).exists())
 
+    def test_summarize_item_ignores_non_article_ok_items(self) -> None:
+        fake = _FakeSummarizer()
+
+        result = summarize_item(
+            item={"status": "ok", "kind": "youtube", "url": "https://youtu.be/abc"},
+            summarizer=fake,
+            run_date=date(2026, 3, 15),
+        )
+
+        self.assertEqual(result["status"], "ignored")
+        self.assertEqual(result["kind"], "youtube")
+
     def test_summarize_item_writes_failure_record_on_exception(self) -> None:
         class _Broken:
             def summarize_article(self, url: str, content: str) -> str:
-                raise RuntimeError("provider error")
-
-            def summarize_youtube(self, url: str) -> str:
                 raise RuntimeError("provider error")
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -59,6 +58,20 @@ class SummarizerTests(unittest.TestCase):
             )
             self.assertEqual(result["status"], "failed")
             self.assertTrue(Path(result["failure_path"]).exists())
+
+    def test_summarize_items_does_not_require_key_when_no_articles(self) -> None:
+        old_key = os.environ.pop("OPENROUTER_API_KEY", None)
+        try:
+            results = summarize_items(
+                items=[{"status": "ignored", "kind": "youtube", "url": "https://youtu.be/abc"}],
+                run_date=date(2026, 3, 15),
+            )
+        finally:
+            if old_key is not None:
+                os.environ["OPENROUTER_API_KEY"] = old_key
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["status"], "ignored")
 
     @patch("src.summarizer.OpenRouterSummarizer")
     def test_summarize_items_uses_openrouter_env(self, mock_cls) -> None:
@@ -93,7 +106,7 @@ class SummarizerTests(unittest.TestCase):
 
             try:
                 results = summarize_items(
-                    items=[{"status": "ok", "kind": "youtube", "url": "https://youtu.be/abc"}],
+                    items=[{"status": "ok", "kind": "article", "url": "https://example.com", "content": "hello"}],
                     run_date=date(2026, 3, 15),
                     sources_base_dir=tmpdir,
                     failed_base_dir=tmpdir,
@@ -118,37 +131,6 @@ class SummarizerTests(unittest.TestCase):
                 models_cache_path=str(Path(tmpdir) / "models.json"),
                 models_cache_ttl_seconds=123,
             )
-
-    def test_extract_youtube_video_id_from_multiple_formats(self) -> None:
-        self.assertEqual(_extract_youtube_video_id("https://youtu.be/abc123"), "abc123")
-        self.assertEqual(_extract_youtube_video_id("https://www.youtube.com/watch?v=xyz789"), "xyz789")
-        self.assertEqual(_extract_youtube_video_id("https://www.youtube.com/shorts/short42"), "short42")
-        self.assertIsNone(_extract_youtube_video_id("https://example.com/video"))
-
-    @patch("src.summarizer.YouTubeTranscriptApi")
-    def test_fetch_youtube_transcript_uses_fetch_api(self, mock_api_cls) -> None:
-        snippet_a = MagicMock()
-        snippet_a.text = "Hello"
-        snippet_a.start = 12.2
-        snippet_b = MagicMock()
-        snippet_b.text = "World"
-        snippet_b.start = 15.7
-
-        instance = mock_api_cls.return_value
-        instance.fetch.return_value = [snippet_a, snippet_b]
-
-        transcript = _fetch_youtube_transcript("https://youtu.be/abc123")
-
-        self.assertIn("[00:12] Hello", transcript)
-        self.assertIn("[00:15] World", transcript)
-
-    @patch("src.summarizer.YouTubeTranscriptApi")
-    def test_fetch_youtube_transcript_raises_when_unavailable(self, mock_api_cls) -> None:
-        instance = mock_api_cls.return_value
-        instance.fetch.side_effect = RuntimeError("No transcripts")
-
-        with self.assertRaises(RuntimeError):
-            _fetch_youtube_transcript("https://youtu.be/abc123")
 
     def test_order_models_prefers_user_picks_then_quality(self) -> None:
         models = [

@@ -8,7 +8,7 @@
 ### Infrastructure
 
 - [x] **INFRA-01**: GitHub repository is scaffolded with the required directory structure (`data/`, `prompts/`, `src/`)
-- [x] **INFRA-02**: `requirements.txt` pins all dependencies with exact versions (`pyTelegramBotAPI`, `google-genai`, `trafilatura`, `requests`, `python-slugify`)
+- [x] **INFRA-02**: `requirements.txt` pins all dependencies with exact versions (`pyTelegramBotAPI`, `trafilatura`, `requests`, `python-slugify`)
 - [x] **INFRA-03**: GitHub Secrets are configured (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `OPENROUTER_API_KEY`)
 - [x] **INFRA-04**: GitHub Actions workflow `digest.yml` is created with daily cron trigger (07:00 UTC) and manual dispatch
 - [x] **INFRA-05**: Workflow declares `permissions: contents: write` to allow `GITHUB_TOKEN` push
@@ -32,7 +32,7 @@
 
 ### Content Fetching
 
-- [x] **FETCH-01**: Pipeline detects URL type (article vs. YouTube) and routes accordingly
+- [x] **FETCH-01**: Pipeline detects URL type and processes articles while silently ignoring non-article URLs
 - [x] **FETCH-02**: Articles are fetched and main content extracted via `trafilatura`
 - [x] **FETCH-03**: All HTTP requests use a hard timeout (`timeout=(10, 30)`) to prevent workflow hangs
 - [x] **FETCH-04**: Failed fetches (timeout, 403, paywall, empty content) write a failure record to `data/failed/YYYY-MM-DD/slug.md` and continue — the pipeline does not abort
@@ -40,7 +40,7 @@
 ### Summarization
 
 - [x] **SUM-01**: Article content is summarized via OpenRouter using free-model selection with cached model discovery
-- [x] **SUM-02**: YouTube URLs are summarized from transcript content fetched via `youtube-transcript-api` (strict fail if transcript unavailable)
+- [x] **SUM-02**: Only article URLs are summarized; YouTube URLs are silently ignored (no failure record, no digest entry)
 - [x] **SUM-03**: Summarization behavior is controlled by a prompt file (`prompts/summarize.txt`) — not hardcoded
 - [x] **SUM-04**: Each summary is written to `data/sources/YYYY-MM-DD/slug.md` as a Markdown file
 - [x] **SUM-05**: OpenRouter API calls include request spacing and retry logic to handle rate limits across free-model fallbacks
@@ -89,7 +89,7 @@
 | Real-time / webhook processing | Fundamentally incompatible with serverless batch model |
 | Persistent server / VPS / hosted bot | Contradicts the zero-infrastructure design axiom |
 | Mobile or web UI | Not needed; Telegram is the interface |
-| Video download (yt-dlp + Whisper) | Deferred while transcript-grounded summarization via `youtube-transcript-api` meets v1 goals |
+| YouTube/video summarization | Excluded from v1 to preserve zero-cost operation and avoid unreliable transcript access from CI IPs |
 | External databases or state stores | Filesystem + Git is the database |
 
 ## Traceability

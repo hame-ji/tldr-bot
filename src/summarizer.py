@@ -6,11 +6,10 @@ import time
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import urlparse
 
 import requests
 from slugify import slugify
-from youtube_transcript_api import YouTubeTranscriptApi
 
 try:
     from content_fetcher import write_failure_record
@@ -340,79 +339,6 @@ class OpenRouterSummarizer(_RetryingSummarizerBase):
     def summarize_article(self, url: str, content: str) -> str:
         return self._generate_with_retry(["URL: " + url, content], error_prefix="OpenRouter summarization failed")
 
-    def summarize_youtube(self, url: str) -> str:
-        transcript = _fetch_youtube_transcript(url)
-        return self._generate_with_retry(
-            ["YouTube URL: " + url, "Transcript:\n" + transcript],
-            error_prefix="OpenRouter summarization failed",
-        )
-
-
-def _extract_youtube_video_id(url: str) -> Optional[str]:
-    parsed = urlparse(url)
-    host = (parsed.netloc or "").lower()
-
-    if host.endswith("youtu.be"):
-        candidate = parsed.path.strip("/")
-        return candidate or None
-
-    if "youtube.com" in host:
-        query_id = parse_qs(parsed.query).get("v", [])
-        if query_id and isinstance(query_id[0], str) and query_id[0]:
-            return query_id[0]
-
-        parts = [segment for segment in parsed.path.split("/") if segment]
-        if len(parts) >= 2 and parts[0] in {"shorts", "embed", "live", "v"}:
-            return parts[1]
-
-    return None
-
-
-def _format_timestamp(seconds: float) -> str:
-    total = max(int(seconds), 0)
-    hours = total // 3600
-    minutes = (total % 3600) // 60
-    secs = total % 60
-    if hours > 0:
-        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-    return f"{minutes:02d}:{secs:02d}"
-
-
-def _fetch_youtube_transcript(url: str, languages: Optional[list[str]] = None) -> str:
-    video_id = _extract_youtube_video_id(url)
-    if not video_id:
-        raise RuntimeError("Unsupported YouTube URL")
-
-    requested_languages = languages or ["en", "en-US", "en-GB"]
-
-    try:
-        api = YouTubeTranscriptApi()
-        if hasattr(api, "fetch"):
-            snippets = api.fetch(video_id, languages=requested_languages)
-            lines: list[str] = []
-            for snippet in snippets:
-                text = getattr(snippet, "text", "").strip()
-                start = float(getattr(snippet, "start", 0.0))
-                if text:
-                    lines.append("[" + _format_timestamp(start) + "] " + text)
-        else:
-            raw_snippets = YouTubeTranscriptApi.get_transcript(video_id, languages=requested_languages)
-            lines = []
-            for snippet in raw_snippets:
-                if not isinstance(snippet, dict):
-                    continue
-                text = str(snippet.get("text", "")).strip()
-                start = float(snippet.get("start", 0.0))
-                if text:
-                    lines.append("[" + _format_timestamp(start) + "] " + text)
-    except Exception as exc:  # noqa: BLE001
-        raise RuntimeError("YouTube transcript unavailable: " + str(exc)) from exc
-
-    if not lines:
-        raise RuntimeError("YouTube transcript unavailable: empty transcript")
-
-    return "\n".join(lines)
-
 
 def _source_output_path(url: str, run_date: date, base_dir: str = "data/sources") -> Path:
     parsed = urlparse(url)
@@ -428,9 +354,6 @@ class Summarizer(Protocol):
     def summarize_article(self, url: str, content: str) -> str:
         ...
 
-    def summarize_youtube(self, url: str) -> str:
-        ...
-
 
 def summarize_item(
     item: Dict[str, Any],
@@ -439,15 +362,15 @@ def summarize_item(
     sources_base_dir: str = "data/sources",
     failed_base_dir: str = "data/failed",
 ) -> Dict[str, Any]:
-    url = item["url"]
     if item.get("status") != "ok":
         return item
 
+    if item.get("kind") != "article":
+        return {"status": "ignored", "kind": item.get("kind", "unknown"), "url": item.get("url", "")}
+
+    url = item["url"]
     try:
-        if item["kind"] == "article":
-            summary = summarizer.summarize_article(url=url, content=item["content"])
-        else:
-            summary = summarizer.summarize_youtube(url=url)
+        summary = summarizer.summarize_article(url=url, content=item["content"])
     except Exception as exc:  # noqa: BLE001
         failure = write_failure_record(url=url, error=str(exc), base_dir=failed_base_dir)
         return {
@@ -474,6 +397,10 @@ def summarize_items(
     sources_base_dir: str = "data/sources",
     failed_base_dir: str = "data/failed",
 ) -> list[Dict[str, Any]]:
+    article_candidates = [item for item in items if item.get("status") == "ok" and item.get("kind") == "article"]
+    if not article_candidates:
+        return [summarize_item(item=item, summarizer=_NoopSummarizer(), run_date=run_date) for item in items]
+
     api_key = os.environ.get("OPENROUTER_API_KEY")
     if not api_key:
         raise RuntimeError("Missing OPENROUTER_API_KEY environment variable")
@@ -517,3 +444,8 @@ def summarize_items(
             )
         )
     return results
+
+
+class _NoopSummarizer:
+    def summarize_article(self, url: str, content: str) -> str:
+        raise RuntimeError("No article summarization candidates")

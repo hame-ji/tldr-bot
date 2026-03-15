@@ -6,15 +6,13 @@ import time
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol
-from urllib.parse import urlparse
 
 import requests
-from slugify import slugify
 
 try:
-    from content_fetcher import write_failure_record
-except Exception:  # noqa: BLE001
-    from src.content_fetcher import write_failure_record
+    from content_fetcher import load_prompt, url_to_slug, write_failure_record
+except ImportError:
+    from src.content_fetcher import load_prompt, url_to_slug, write_failure_record
 
 
 class _RetryingSummarizerBase:
@@ -66,10 +64,7 @@ class _RetryingSummarizerBase:
         return min(exp + jitter, self.max_backoff_seconds)
 
     def _load_prompt(self) -> str:
-        path = Path(self.prompt_path)
-        if not path.exists():
-            raise RuntimeError("Missing summarize prompt file: " + self.prompt_path)
-        return path.read_text(encoding="utf-8").strip()
+        return load_prompt(self.prompt_path)
 
     def _generate_once(self, prompt: str, contents: list[str]) -> str:
         raise NotImplementedError
@@ -341,9 +336,7 @@ class OpenRouterSummarizer(_RetryingSummarizerBase):
 
 
 def _source_output_path(url: str, run_date: date, base_dir: str = "data/sources") -> Path:
-    parsed = urlparse(url)
-    slug_seed = (parsed.netloc + parsed.path).strip("/") or "source"
-    slug = slugify(slug_seed)[:80] or "source"
+    slug = url_to_slug(url, fallback="source")
     day = run_date.isoformat()
     out_dir = Path(base_dir) / day
     out_dir.mkdir(parents=True, exist_ok=True)

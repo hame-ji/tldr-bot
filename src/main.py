@@ -7,7 +7,7 @@ try:
     from digest_generator import generate_digest
     from summarizer import summarize_items
     from telegram_client import poll_urls_from_env, send_digest_from_env
-except Exception:  # noqa: BLE001
+except ImportError:
     from src.content_fetcher import fetch_urls
     from src.digest_generator import generate_digest
     from src.summarizer import summarize_items

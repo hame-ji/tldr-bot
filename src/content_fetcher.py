@@ -8,13 +8,26 @@ from slugify import slugify
 
 try:
     import trafilatura
-except Exception:  # noqa: BLE001
+except ImportError:
     class _TrafilaturaFallback:
         @staticmethod
         def extract(*_args: Any, **_kwargs: Any) -> str:
             raise RuntimeError("trafilatura import failed; install optional html clean dependency")
 
     trafilatura = _TrafilaturaFallback()
+
+
+def url_to_slug(url: str, fallback: str = "url") -> str:
+    parsed = urlparse(url)
+    slug_seed = (parsed.netloc + parsed.path).strip("/") or fallback
+    return slugify(slug_seed)[:80] or fallback
+
+
+def load_prompt(path: str) -> str:
+    try:
+        return Path(path).read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        raise RuntimeError("Missing prompt file: " + path) from None
 
 
 YOUTUBE_HOSTS = {
@@ -60,9 +73,7 @@ def write_failure_record(
     day = timestamp.strftime("%Y-%m-%d")
     stamp = timestamp.isoformat()
 
-    parsed = urlparse(url)
-    slug_seed = (parsed.netloc + parsed.path).strip("/") or "url"
-    slug = slugify(slug_seed)[:80] or "url"
+    slug = url_to_slug(url)
 
     out_dir = Path(base_dir) / day
     out_dir.mkdir(parents=True, exist_ok=True)

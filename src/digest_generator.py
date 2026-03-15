@@ -2,12 +2,10 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-
-def _load_digest_prompt(prompt_path: str = "prompts/digest.txt") -> str:
-    path = Path(prompt_path)
-    if not path.exists():
-        raise RuntimeError("Missing digest prompt file: " + prompt_path)
-    return path.read_text(encoding="utf-8").strip()
+try:
+    from content_fetcher import load_prompt
+except ImportError:
+    from src.content_fetcher import load_prompt
 
 
 def _render_digest(
@@ -15,7 +13,7 @@ def _render_digest(
     run_date: date,
     prompt_path: str = "prompts/digest.txt",
 ) -> str:
-    prompt = _load_digest_prompt(prompt_path=prompt_path)
+    prompt = load_prompt(prompt_path)
 
     successful = [item for item in items if item.get("status") == "ok"]
     failed = [item for item in items if item.get("status") == "failed"]

@@ -150,9 +150,13 @@ class SummarizerTests(unittest.TestCase):
         mock_cls.return_value = fake
         with tempfile.TemporaryDirectory() as tmpdir:
             old_provider = os.environ.get("SUMMARIZER_PROVIDER")
+            old_article_provider = os.environ.get("SUMMARIZER_PROVIDER_ARTICLE")
+            old_youtube_provider = os.environ.get("SUMMARIZER_PROVIDER_YOUTUBE")
             old_openrouter_key = os.environ.get("OPENROUTER_API_KEY")
             old_openrouter_model = os.environ.get("OPENROUTER_MODEL")
             os.environ["SUMMARIZER_PROVIDER"] = "openrouter"
+            os.environ.pop("SUMMARIZER_PROVIDER_ARTICLE", None)
+            os.environ.pop("SUMMARIZER_PROVIDER_YOUTUBE", None)
             os.environ["OPENROUTER_API_KEY"] = "or-test-key"
             os.environ["OPENROUTER_MODEL"] = "openrouter/auto"
             try:
@@ -167,6 +171,14 @@ class SummarizerTests(unittest.TestCase):
                     os.environ.pop("SUMMARIZER_PROVIDER", None)
                 else:
                     os.environ["SUMMARIZER_PROVIDER"] = old_provider
+                if old_article_provider is None:
+                    os.environ.pop("SUMMARIZER_PROVIDER_ARTICLE", None)
+                else:
+                    os.environ["SUMMARIZER_PROVIDER_ARTICLE"] = old_article_provider
+                if old_youtube_provider is None:
+                    os.environ.pop("SUMMARIZER_PROVIDER_YOUTUBE", None)
+                else:
+                    os.environ["SUMMARIZER_PROVIDER_YOUTUBE"] = old_youtube_provider
                 if old_openrouter_key is None:
                     os.environ.pop("OPENROUTER_API_KEY", None)
                 else:

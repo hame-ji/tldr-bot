@@ -1,7 +1,7 @@
 # Project State: Telegram Research Digest Bot
 
 **Last updated:** 2026-03-15
-**Session:** Phase 3 execution complete
+**Session:** Phase 4 execution complete
 
 ---
 
@@ -17,16 +17,16 @@
 
 ## Current Position
 
-**Current phase:** Phase 3 — Content Fetching
+**Current phase:** Phase 4 — Gemini Summarization
 **Current plan:** None (all phase plans complete)
-**Status:** Complete (ready for Phase 4)
+**Status:** Complete (ready for Phase 5)
 
 ```
 Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
-           [  DONE  ][  DONE  ][  DONE  ][  TODO  ][  TODO  ][  TODO  ]
+           [  DONE  ][  DONE  ][  DONE  ][  DONE  ][  TODO  ][  TODO  ]
 ```
 
-**Phase completion:** 3/6
+**Phase completion:** 4/6
 
 ---
 
@@ -35,10 +35,10 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 | Metric | Value |
 |--------|-------|
 | Phases total | 6 |
-| Phases complete | 3 |
+| Phases complete | 4 |
 | Requirements mapped | 34/34 |
-| Plans created | 7 |
-| Plans complete | 7 |
+| Plans created | 9 |
+| Plans complete | 9 |
 
 ---
 
@@ -86,7 +86,8 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 - [x] Verify `getUpdates` returns messages (no active webhook) → Phase 1
 - [x] Implement Telegram polling, chat filtering, and URL extraction in code + tests -> Phase 2
 - [x] Implement content fetching with timeout guards and failure records -> Phase 3
-- [ ] Verify Gemini native YouTube URL processing in Phase 4 before building full YouTube path
+- [x] Implement Gemini summarizer with prompt file control, retries, and source-file outputs -> Phase 4
+- [ ] Run live verification for Gemini YouTube URL processing on real input
 - [ ] Decide `parse_mode` (Markdown v1 vs HTML) before Phase 5 delivery implementation
 
 ---
@@ -102,7 +103,7 @@ None.
 ### To resume this project:
 1. Read `.planning/ROADMAP.md` — current phase and success criteria
 2. Read `.planning/STATE.md` (this file) — decisions, pitfalls, todos
-3. Run `/gsd-plan-phase 4` to start Gemini summarization implementation
+3. Run `/gsd-plan-phase 5` to start digest generation and Telegram delivery
 
 ### Planning artifacts:
 - `.planning/PROJECT.md` — project goals and constraints

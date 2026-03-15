@@ -39,11 +39,11 @@
 
 ### Summarization
 
-- [ ] **SUM-01**: Article content is summarized via Gemini 2.0 Flash using the `google-genai` SDK (not deprecated `google-generativeai`)
-- [ ] **SUM-02**: YouTube URLs are passed natively to Gemini for processing (no yt-dlp or transcript extraction)
-- [ ] **SUM-03**: Summarization behavior is controlled by a prompt file (`prompts/summarize.txt`) — not hardcoded
-- [ ] **SUM-04**: Each summary is written to `data/sources/YYYY-MM-DD/slug.md` as a Markdown file
-- [ ] **SUM-05**: Gemini API calls include `time.sleep(1)` spacing and 429 retry logic to handle rate limits
+- [x] **SUM-01**: Article content is summarized via Gemini 2.0 Flash using the `google-genai` SDK (not deprecated `google-generativeai`)
+- [x] **SUM-02**: YouTube URLs are passed natively to Gemini for processing (no yt-dlp or transcript extraction)
+- [x] **SUM-03**: Summarization behavior is controlled by a prompt file (`prompts/summarize.txt`) — not hardcoded
+- [x] **SUM-04**: Each summary is written to `data/sources/YYYY-MM-DD/slug.md` as a Markdown file
+- [x] **SUM-05**: Gemini API calls include `time.sleep(1)` spacing and 429 retry logic to handle rate limits
 
 ### Digest & Delivery
 

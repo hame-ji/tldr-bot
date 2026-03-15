@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from content_fetcher import fetch_urls
+from summarizer import summarize_items
 from telegram_client import poll_urls_from_env
 
 
@@ -16,6 +17,13 @@ def main() -> None:
             print(f"ok:{item['kind']}:{item['url']}")
         else:
             print(f"failed:{item['url']} -> {item['failure_path']}")
+
+    summarized = summarize_items(fetch_results, run_date=datetime.now(timezone.utc).date())
+    for item in summarized:
+        if item["status"] == "ok":
+            print(f"summary:{item['url']} -> {item['summary_path']}")
+        else:
+            print(f"summary_failed:{item['url']} -> {item['failure_path']}")
 
 
 if __name__ == "__main__":

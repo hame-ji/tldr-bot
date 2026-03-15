@@ -25,7 +25,7 @@
 | 1. Infrastructure & Bot Setup | 3/3 | Completed | 2026-03-15 |
 | 2. Telegram Polling Client | 2/2 | Completed | 2026-03-15 |
 | 3. Content Fetching | 2/2 | Completed | 2026-03-15 |
-| 4. Gemini Summarization | 0/? | Not started | - |
+| 4. Gemini Summarization | 2/2 | Completed | 2026-03-15 |
 | 5. Digest Generation & Delivery | 0/? | Not started | - |
 | 6. Pipeline Orchestration & Git Integration | 0/? | Not started | - |
 
@@ -81,7 +81,9 @@
   2. A YouTube URL is summarized natively by Gemini (no yt-dlp or transcript extraction) and produces a source file in the same format
   3. When the Gemini API returns a 429, the pipeline retries with backoff and eventually succeeds (or writes to `data/failed/` after exhausting retries) — it does not crash
   4. Changing `prompts/summarize.txt` changes the summary output without any code changes
-**Plans:** TBD
+**Plans:** 2 plans
+- [x] `04-01-PLAN.md` — Implement Gemini summarizer wrapper and prompt-file control
+- [x] `04-02-PLAN.md` — Persist summaries and add summarizer failure-handling tests
 
 ### Phase 5: Digest Generation & Delivery
 **Goal:** The pipeline assembles a daily Markdown digest from all summaries, delivers it to Telegram in correctly-chunked messages, includes a section for failed URLs, and skips delivery entirely on days with no processed URLs.
@@ -132,11 +134,11 @@
 | FETCH-02 | Phase 3 | Completed |
 | FETCH-03 | Phase 3 | Completed |
 | FETCH-04 | Phase 3 | Completed |
-| SUM-01 | Phase 4 | Pending |
-| SUM-02 | Phase 4 | Pending |
-| SUM-03 | Phase 4 | Pending |
-| SUM-04 | Phase 4 | Pending |
-| SUM-05 | Phase 4 | Pending |
+| SUM-01 | Phase 4 | Completed |
+| SUM-02 | Phase 4 | Completed |
+| SUM-03 | Phase 4 | Completed |
+| SUM-04 | Phase 4 | Completed |
+| SUM-05 | Phase 4 | Completed |
 | DGST-01 | Phase 5 | Pending |
 | DGST-02 | Phase 5 | Pending |
 | DGST-03 | Phase 5 | Pending |

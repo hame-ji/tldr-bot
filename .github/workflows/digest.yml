@@ -24,6 +24,13 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      SUMMARIZER_PROVIDER: "gemini"
+      SUMMARIZER_PROVIDER_ARTICLE: "gemini"
+      SUMMARIZER_PROVIDER_YOUTUBE: "gemini"
+      OPENROUTER_MODEL: "openrouter/auto"
+      GEMINI_MODEL: "gemini-2.5-flash"
+      GEMINI_FALLBACK_MODELS: "gemini-2.5-flash-lite"
       GEMINI_MIN_SPACING_SECONDS: "2"
       GEMINI_MAX_RETRIES: "8"
       GEMINI_INITIAL_BACKOFF_SECONDS: "10"
@@ -51,7 +58,16 @@ jobs:
         run: |
           test -n "$TELEGRAM_BOT_TOKEN"
           test -n "$TELEGRAM_CHAT_ID"
-          test -n "$GEMINI_API_KEY"
+          ARTICLE_PROVIDER="${SUMMARIZER_PROVIDER_ARTICLE:-$SUMMARIZER_PROVIDER}"
+          YOUTUBE_PROVIDER="${SUMMARIZER_PROVIDER_YOUTUBE:-$SUMMARIZER_PROVIDER}"
+
+          if [ "$ARTICLE_PROVIDER" = "openrouter" ] || [ "$YOUTUBE_PROVIDER" = "openrouter" ]; then
+            test -n "$OPENROUTER_API_KEY"
+          fi
+
+          if [ "$ARTICLE_PROVIDER" = "gemini" ] || [ "$YOUTUBE_PROVIDER" = "gemini" ]; then
+            test -n "$GEMINI_API_KEY"
+          fi
 
       - name: Validate Telegram bot token and clear webhook
         run: |

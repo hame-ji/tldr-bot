@@ -1,0 +1,148 @@
+# Roadmap: Telegram Research Digest Bot
+
+**Project:** tldr-bot — Personal Telegram URL Digest Bot
+**Core Value:** A daily digest of everything you saved, summarized and delivered automatically, so nothing you save goes unread.
+**Created:** 2026-03-15
+**Granularity:** Coarse (6 phases — dependency-driven; each phase is independently testable before the next begins)
+
+---
+
+## Phases
+
+- [ ] **Phase 1: Infrastructure & Bot Setup** - Repo scaffold, GitHub Secrets, verified bot token, and workflow that can push commits
+- [ ] **Phase 2: Telegram Polling Client** - Correct offset-based polling with state.json persistence and ALLOWED_CHAT_ID filtering
+- [ ] **Phase 3: Content Fetching** - URL classification, article extraction via trafilatura, timeout safety, and failure records
+- [ ] **Phase 4: Gemini Summarization** - AI summarization for articles and YouTube URLs with prompt file control and rate-limit resilience
+- [ ] **Phase 5: Digest Generation & Delivery** - Daily digest assembled and chunked for Telegram delivery, with failure section and empty-day guard
+- [ ] **Phase 6: Pipeline Orchestration & Git Integration** - Full pipeline wired via main.py, amend-or-create commit strategy, and end-to-end verified run
+
+---
+
+## Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Infrastructure & Bot Setup | 0/? | Not started | - |
+| 2. Telegram Polling Client | 0/? | Not started | - |
+| 3. Content Fetching | 0/? | Not started | - |
+| 4. Gemini Summarization | 0/? | Not started | - |
+| 5. Digest Generation & Delivery | 0/? | Not started | - |
+| 6. Pipeline Orchestration & Git Integration | 0/? | Not started | - |
+
+---
+
+## Phase Details
+
+### Phase 1: Infrastructure & Bot Setup
+**Goal:** The repository is fully scaffolded, all credentials are provisioned and verified, the GitHub Actions workflow can authenticate and push commits, and the Telegram bot has no active webhook blocking polling.
+**Depends on:** Nothing (first phase)
+**Requirements:** INFRA-01, INFRA-02, INFRA-03, INFRA-04, INFRA-05, INFRA-06, INFRA-07, BOT-01, BOT-02, BOT-03
+**Success Criteria** (what must be TRUE):
+  1. `data/`, `prompts/`, and `src/` directories exist in the repository and `requirements.txt` pins exact versions of all five dependencies
+  2. GitHub Secrets (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GEMINI_API_KEY`) are set and the bot token is confirmed valid via a live BotFather test
+  3. `digest.yml` workflow runs successfully (manually dispatched), authenticates with `GITHUB_TOKEN`, and can push a test commit to the repo
+  4. `getUpdates` returns real messages (not an empty array), confirming no active webhook is blocking polling
+**Plans:** TBD
+
+### Phase 2: Telegram Polling Client
+**Goal:** The pipeline can retrieve new Telegram messages, extract URLs from message text, filter by chat ID, and correctly persist the polling offset so no message is processed twice.
+**Depends on:** Phase 1
+**Requirements:** POLL-01, POLL-02, POLL-03, POLL-04, POLL-05, POLL-06
+**Success Criteria** (what must be TRUE):
+  1. Sending a URL to the bot and running the pipeline produces that URL in the extracted list; running the pipeline again does NOT re-produce the same URL (offset is correctly advanced)
+  2. `state.json` in the repository root contains `last_update_id + 1` (not `last_update_id`) after a successful poll
+  3. Messages from a chat ID not matching `ALLOWED_CHAT_ID` are silently ignored and do not appear in the URL list
+  4. URLs embedded in surrounding text (e.g., "check this out https://example.com good stuff") are correctly extracted by regex
+**Plans:** TBD
+
+### Phase 3: Content Fetching
+**Goal:** The pipeline can classify a URL as article or YouTube, fetch and extract article content via trafilatura with mandatory timeouts, and write a failure record for any URL that cannot be fetched — without aborting the pipeline.
+**Depends on:** Phase 2
+**Requirements:** FETCH-01, FETCH-02, FETCH-03, FETCH-04
+**Success Criteria** (what must be TRUE):
+  1. A valid article URL returns extracted main-body text (not HTML boilerplate); a YouTube URL is classified separately and not passed to trafilatura
+  2. A URL that times out (or returns 403/paywall/empty content) produces a Markdown file in `data/failed/YYYY-MM-DD/slug.md` and the fetcher returns control to the caller — the pipeline does not abort
+  3. All HTTP requests complete within the configured hard timeout (`timeout=(10, 30)`) — no request can hang indefinitely
+**Plans:** TBD
+
+### Phase 4: Gemini Summarization
+**Goal:** The pipeline can summarize article text and YouTube URLs via Gemini 2.0 Flash using prompt files, handle rate limits gracefully, and write each summary as a dated Markdown file — without SDK import errors or silent safety-block failures.
+**Depends on:** Phase 3
+**Requirements:** SUM-01, SUM-02, SUM-03, SUM-04, SUM-05
+**Success Criteria** (what must be TRUE):
+  1. A real article URL produces a summary written to `data/sources/YYYY-MM-DD/slug.md` using the behavior defined in `prompts/summarize.txt`
+  2. A YouTube URL is summarized natively by Gemini (no yt-dlp or transcript extraction) and produces a source file in the same format
+  3. When the Gemini API returns a 429, the pipeline retries with backoff and eventually succeeds (or writes to `data/failed/` after exhausting retries) — it does not crash
+  4. Changing `prompts/summarize.txt` changes the summary output without any code changes
+**Plans:** TBD
+
+### Phase 5: Digest Generation & Delivery
+**Goal:** The pipeline assembles a daily Markdown digest from all summaries, delivers it to Telegram in correctly-chunked messages, includes a section for failed URLs, and skips delivery entirely on days with no processed URLs.
+**Depends on:** Phase 4
+**Requirements:** DGST-01, DGST-02, DGST-03, DGST-04, DGST-05, DGST-06
+**Success Criteria** (what must be TRUE):
+  1. After a run with 3+ URLs, a dated digest file exists at `data/digests/YYYY-MM-DD.md` and a Telegram message (or message series) arrives with the digest content
+  2. A digest exceeding 4096 characters is delivered as multiple sequential Telegram messages, each split at a paragraph boundary — no `400 Bad Request` errors
+  3. Failed URLs appear in a dedicated section of the digest (user can see what didn't process)
+  4. On a day with no URLs sent, no digest is generated, no Telegram message is sent, and no commit is made
+  5. Changing `prompts/digest.txt` changes the digest format without any code changes
+**Plans:** TBD
+
+### Phase 6: Pipeline Orchestration & Git Integration
+**Goal:** All modules are wired together through main.py with per-URL failure isolation; the GitHub Actions workflow commits all outputs using an amend-or-create-per-day strategy; and a complete end-to-end run (cron or manual) succeeds in the Actions environment.
+**Depends on:** Phase 5
+**Requirements:** STOR-01, STOR-02, STOR-03, STOR-04
+**Success Criteria** (what must be TRUE):
+  1. A full pipeline run (send URLs → cron fires → digest delivered → commit pushed) completes successfully in GitHub Actions with a single commit containing all outputs
+  2. Running the pipeline twice on the same day (manual re-trigger) produces one amended commit — not two commits — and the digest reflects all URLs from both runs
+  3. `--force-with-lease` push succeeds after the amend; no force-push conflicts occur in the standard single-user workflow
+  4. A URL that causes an unhandled exception in any module writes a failure record and allows the pipeline to continue processing remaining URLs
+**Plans:** TBD
+
+---
+
+## Coverage
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| INFRA-01 | Phase 1 | Pending |
+| INFRA-02 | Phase 1 | Pending |
+| INFRA-03 | Phase 1 | Pending |
+| INFRA-04 | Phase 1 | Pending |
+| INFRA-05 | Phase 1 | Pending |
+| INFRA-06 | Phase 1 | Pending |
+| INFRA-07 | Phase 1 | Pending |
+| BOT-01 | Phase 1 | Pending |
+| BOT-02 | Phase 1 | Pending |
+| BOT-03 | Phase 1 | Pending |
+| POLL-01 | Phase 2 | Pending |
+| POLL-02 | Phase 2 | Pending |
+| POLL-03 | Phase 2 | Pending |
+| POLL-04 | Phase 2 | Pending |
+| POLL-05 | Phase 2 | Pending |
+| POLL-06 | Phase 2 | Pending |
+| FETCH-01 | Phase 3 | Pending |
+| FETCH-02 | Phase 3 | Pending |
+| FETCH-03 | Phase 3 | Pending |
+| FETCH-04 | Phase 3 | Pending |
+| SUM-01 | Phase 4 | Pending |
+| SUM-02 | Phase 4 | Pending |
+| SUM-03 | Phase 4 | Pending |
+| SUM-04 | Phase 4 | Pending |
+| SUM-05 | Phase 4 | Pending |
+| DGST-01 | Phase 5 | Pending |
+| DGST-02 | Phase 5 | Pending |
+| DGST-03 | Phase 5 | Pending |
+| DGST-04 | Phase 5 | Pending |
+| DGST-05 | Phase 5 | Pending |
+| DGST-06 | Phase 5 | Pending |
+| STOR-01 | Phase 6 | Pending |
+| STOR-02 | Phase 6 | Pending |
+| STOR-03 | Phase 6 | Pending |
+| STOR-04 | Phase 6 | Pending |
+
+**Coverage:** 34/34 v1 requirements mapped ✓
+
+---
+*Roadmap created: 2026-03-15*
+*Last updated: 2026-03-15*

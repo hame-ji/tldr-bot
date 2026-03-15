@@ -96,41 +96,41 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Phase 1 | Pending |
-| INFRA-02 | Phase 1 | Pending |
-| INFRA-03 | Phase 1 | Pending |
-| INFRA-04 | Phase 1 | Pending |
-| INFRA-05 | Phase 1 | Pending |
-| INFRA-06 | Phase 1 | Pending |
-| INFRA-07 | Phase 1 | Pending |
-| BOT-01 | Phase 1 | Pending |
-| BOT-02 | Phase 1 | Pending |
-| BOT-03 | Phase 1 | Pending |
-| POLL-01 | Phase 2 | Pending |
-| POLL-02 | Phase 2 | Pending |
-| POLL-03 | Phase 2 | Pending |
-| POLL-04 | Phase 2 | Pending |
-| POLL-05 | Phase 2 | Pending |
-| POLL-06 | Phase 2 | Pending |
-| FETCH-01 | Phase 3 | Pending |
-| FETCH-02 | Phase 3 | Pending |
-| FETCH-03 | Phase 3 | Pending |
-| FETCH-04 | Phase 3 | Pending |
-| SUM-01 | Phase 4 | Pending |
-| SUM-02 | Phase 4 | Pending |
-| SUM-03 | Phase 4 | Pending |
-| SUM-04 | Phase 4 | Pending |
-| SUM-05 | Phase 4 | Pending |
-| DGST-01 | Phase 5 | Pending |
-| DGST-02 | Phase 5 | Pending |
-| DGST-03 | Phase 5 | Pending |
-| DGST-04 | Phase 5 | Pending |
-| DGST-05 | Phase 5 | Pending |
-| DGST-06 | Phase 5 | Pending |
-| STOR-01 | Phase 6 | Pending |
-| STOR-02 | Phase 6 | Pending |
-| STOR-03 | Phase 6 | Pending |
-| STOR-04 | Phase 6 | Pending |
+| INFRA-01 | Phase 1 — Infrastructure & Bot Setup | Pending |
+| INFRA-02 | Phase 1 — Infrastructure & Bot Setup | Pending |
+| INFRA-03 | Phase 1 — Infrastructure & Bot Setup | Pending |
+| INFRA-04 | Phase 1 — Infrastructure & Bot Setup | Pending |
+| INFRA-05 | Phase 1 — Infrastructure & Bot Setup | Pending |
+| INFRA-06 | Phase 1 — Infrastructure & Bot Setup | Pending |
+| INFRA-07 | Phase 1 — Infrastructure & Bot Setup | Pending |
+| BOT-01 | Phase 1 — Infrastructure & Bot Setup | Pending |
+| BOT-02 | Phase 1 — Infrastructure & Bot Setup | Pending |
+| BOT-03 | Phase 1 — Infrastructure & Bot Setup | Pending |
+| POLL-01 | Phase 2 — Telegram Polling Client | Pending |
+| POLL-02 | Phase 2 — Telegram Polling Client | Pending |
+| POLL-03 | Phase 2 — Telegram Polling Client | Pending |
+| POLL-04 | Phase 2 — Telegram Polling Client | Pending |
+| POLL-05 | Phase 2 — Telegram Polling Client | Pending |
+| POLL-06 | Phase 2 — Telegram Polling Client | Pending |
+| FETCH-01 | Phase 3 — Content Fetching | Pending |
+| FETCH-02 | Phase 3 — Content Fetching | Pending |
+| FETCH-03 | Phase 3 — Content Fetching | Pending |
+| FETCH-04 | Phase 3 — Content Fetching | Pending |
+| SUM-01 | Phase 4 — Gemini Summarization | Pending |
+| SUM-02 | Phase 4 — Gemini Summarization | Pending |
+| SUM-03 | Phase 4 — Gemini Summarization | Pending |
+| SUM-04 | Phase 4 — Gemini Summarization | Pending |
+| SUM-05 | Phase 4 — Gemini Summarization | Pending |
+| DGST-01 | Phase 5 — Digest Generation & Delivery | Pending |
+| DGST-02 | Phase 5 — Digest Generation & Delivery | Pending |
+| DGST-03 | Phase 5 — Digest Generation & Delivery | Pending |
+| DGST-04 | Phase 5 — Digest Generation & Delivery | Pending |
+| DGST-05 | Phase 5 — Digest Generation & Delivery | Pending |
+| DGST-06 | Phase 5 — Digest Generation & Delivery | Pending |
+| STOR-01 | Phase 6 — Pipeline Orchestration & Git Integration | Pending |
+| STOR-02 | Phase 6 — Pipeline Orchestration & Git Integration | Pending |
+| STOR-03 | Phase 6 — Pipeline Orchestration & Git Integration | Pending |
+| STOR-04 | Phase 6 — Pipeline Orchestration & Git Integration | Pending |
 
 **Coverage:**
 - v1 requirements: 34 total
@@ -139,4 +139,4 @@
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-15 after initial definition*
+*Last updated: 2026-03-15 after roadmap creation*

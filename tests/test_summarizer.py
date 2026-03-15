@@ -82,7 +82,14 @@ class SummarizerTests(unittest.TestCase):
 
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0]["status"], "ok")
-            mock_cls.assert_called_once()
+            mock_cls.assert_called_once_with(
+                api_key="test-key",
+                model="gemini-2.0-flash",
+                min_spacing_seconds=1.0,
+                max_retries=6,
+                initial_backoff_seconds=5.0,
+                max_backoff_seconds=120.0,
+            )
 
 
 if __name__ == "__main__":

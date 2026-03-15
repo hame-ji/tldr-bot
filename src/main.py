@@ -23,7 +23,8 @@ def main() -> None:
         if item["status"] == "ok":
             print(f"summary:{item['url']} -> {item['summary_path']}")
         else:
-            print(f"summary_failed:{item['url']} -> {item['failure_path']}")
+            error = item.get("error", "unknown")
+            print(f"summary_failed:{item['url']} -> {item['failure_path']} ({error})")
 
 
 if __name__ == "__main__":

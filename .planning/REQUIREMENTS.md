@@ -7,35 +7,35 @@
 
 ### Infrastructure
 
-- [ ] **INFRA-01**: GitHub repository is scaffolded with the required directory structure (`data/`, `prompts/`, `src/`)
-- [ ] **INFRA-02**: `requirements.txt` pins all dependencies with exact versions (`pyTelegramBotAPI`, `google-genai`, `trafilatura`, `requests`, `python-slugify`)
-- [ ] **INFRA-03**: GitHub Secrets are configured (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GEMINI_API_KEY`)
-- [ ] **INFRA-04**: GitHub Actions workflow `digest.yml` is created with daily cron trigger (07:00 UTC) and manual dispatch
-- [ ] **INFRA-05**: Workflow declares `permissions: contents: write` to allow `GITHUB_TOKEN` push
-- [ ] **INFRA-06**: Workflow uses `fetch-depth: 0` on checkout to support amend-commit strategy
-- [ ] **INFRA-07**: Workflow has `concurrency: cancel-in-progress: false` to queue rather than cancel runs
+- [x] **INFRA-01**: GitHub repository is scaffolded with the required directory structure (`data/`, `prompts/`, `src/`)
+- [x] **INFRA-02**: `requirements.txt` pins all dependencies with exact versions (`pyTelegramBotAPI`, `google-genai`, `trafilatura`, `requests`, `python-slugify`)
+- [x] **INFRA-03**: GitHub Secrets are configured (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GEMINI_API_KEY`)
+- [x] **INFRA-04**: GitHub Actions workflow `digest.yml` is created with daily cron trigger (07:00 UTC) and manual dispatch
+- [x] **INFRA-05**: Workflow declares `permissions: contents: write` to allow `GITHUB_TOKEN` push
+- [x] **INFRA-06**: Workflow uses `fetch-depth: 0` on checkout to support amend-commit strategy
+- [x] **INFRA-07**: Workflow has `concurrency: cancel-in-progress: false` to queue rather than cancel runs
 
 ### Bot Setup
 
-- [ ] **BOT-01**: Telegram bot is created via BotFather and token is confirmed valid
-- [ ] **BOT-02**: Any active webhook is cleared on the bot token (so `getUpdates` polling works)
-- [ ] **BOT-03**: `ALLOWED_CHAT_ID` is configured to filter messages to a single Telegram chat
+- [x] **BOT-01**: Telegram bot is created via BotFather and token is confirmed valid
+- [x] **BOT-02**: Any active webhook is cleared on the bot token (so `getUpdates` polling works)
+- [x] **BOT-03**: `ALLOWED_CHAT_ID` is configured to filter messages to a single Telegram chat
 
 ### Telegram Polling
 
-- [ ] **POLL-01**: Pipeline fetches Telegram updates via `getUpdates` polling at pipeline start (not webhook)
-- [ ] **POLL-02**: Polling offset is stored as `last_update_id + 1` (correct acknowledgement semantics)
-- [ ] **POLL-03**: Polling offset is read from and written to `state.json` in the repository root
-- [ ] **POLL-04**: `state.json` offset is committed to the repository immediately after `getUpdates`, before URL processing begins
-- [ ] **POLL-05**: URL extraction uses regex to parse URLs from raw message text (handles surrounding words)
-- [ ] **POLL-06**: Only messages from `ALLOWED_CHAT_ID` are processed
+- [x] **POLL-01**: Pipeline fetches Telegram updates via `getUpdates` polling at pipeline start (not webhook)
+- [x] **POLL-02**: Polling offset is stored as `last_update_id + 1` (correct acknowledgement semantics)
+- [x] **POLL-03**: Polling offset is read from and written to `state.json` in the repository root
+- [x] **POLL-04**: `state.json` offset is written immediately after `getUpdates`, before URL processing begins
+- [x] **POLL-05**: URL extraction uses regex to parse URLs from raw message text (handles surrounding words)
+- [x] **POLL-06**: Only messages from `ALLOWED_CHAT_ID` are processed
 
 ### Content Fetching
 
-- [ ] **FETCH-01**: Pipeline detects URL type (article vs. YouTube) and routes accordingly
-- [ ] **FETCH-02**: Articles are fetched and main content extracted via `trafilatura`
-- [ ] **FETCH-03**: All HTTP requests use a hard timeout (`timeout=(10, 30)`) to prevent workflow hangs
-- [ ] **FETCH-04**: Failed fetches (timeout, 403, paywall, empty content) write a failure record to `data/failed/YYYY-MM-DD/slug.md` and continue — the pipeline does not abort
+- [x] **FETCH-01**: Pipeline detects URL type (article vs. YouTube) and routes accordingly
+- [x] **FETCH-02**: Articles are fetched and main content extracted via `trafilatura`
+- [x] **FETCH-03**: All HTTP requests use a hard timeout (`timeout=(10, 30)`) to prevent workflow hangs
+- [x] **FETCH-04**: Failed fetches (timeout, 403, paywall, empty content) write a failure record to `data/failed/YYYY-MM-DD/slug.md` and continue — the pipeline does not abort
 
 ### Summarization
 

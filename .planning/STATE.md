@@ -1,7 +1,7 @@
 # Project State: Telegram Research Digest Bot
 
 **Last updated:** 2026-03-15
-**Session:** Phase 1 execution in progress
+**Session:** Phase 3 execution complete
 
 ---
 
@@ -17,16 +17,16 @@
 
 ## Current Position
 
-**Current phase:** Phase 1 — Infrastructure & Bot Setup
-**Current plan:** `01-03` checkpoint (manual credential setup)
-**Status:** In progress (blocked on external setup)
+**Current phase:** Phase 3 — Content Fetching
+**Current plan:** None (all phase plans complete)
+**Status:** Complete (ready for Phase 4)
 
 ```
 Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
-           [  TODO  ][  TODO  ][  TODO  ][  TODO  ][  TODO  ][  TODO  ]
+           [  DONE  ][  DONE  ][  DONE  ][  TODO  ][  TODO  ][  TODO  ]
 ```
 
-**Phase completion:** 0/6
+**Phase completion:** 3/6
 
 ---
 
@@ -35,10 +35,10 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 | Metric | Value |
 |--------|-------|
 | Phases total | 6 |
-| Phases complete | 0 |
+| Phases complete | 3 |
 | Requirements mapped | 34/34 |
-| Plans created | 3 |
-| Plans complete | 2 |
+| Plans created | 7 |
+| Plans complete | 7 |
 
 ---
 
@@ -55,10 +55,10 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 
 ### Critical Pitfalls to Watch
 
-1. **Telegram offset off-by-one** — Store `max(update_id) + 1`, not `max(update_id)` → Phase 2
+1. **Telegram offset off-by-one** — Store `max(update_id) + 1`, not `max(update_id)` -> Implemented in Phase 2
 2. **state.json not committed before processing** — Write offset commit before any URL fetching begins → Phase 6 (orchestration)
 3. **GITHUB_TOKEN missing `contents: write`** — Must be explicit in workflow permissions → Phase 1
-4. **requests without timeout** — Always `timeout=(10, 30)` → Phase 3
+4. **requests without timeout** — Always `timeout=(10, 30)` -> Implemented in Phase 3
 5. **Telegram 4096-char limit** — Chunk on paragraph boundaries before sending → Phase 5
 6. **Webhook blocking getUpdates** — Run `deleteWebhook` during bot setup → Phase 1
 7. **SDK confusion** — Only `from google import genai`; never `google.generativeai` → Phase 1 (deps) + Phase 4
@@ -81,9 +81,11 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 
 ## Todos
 
-- [ ] Create Telegram bot via BotFather and save token → Phase 1
-- [ ] Create Gemini API key → Phase 1
-- [ ] Verify `getUpdates` returns messages (no active webhook) → Phase 1
+- [x] Create Telegram bot via BotFather and save token → Phase 1
+- [x] Create Gemini API key → Phase 1
+- [x] Verify `getUpdates` returns messages (no active webhook) → Phase 1
+- [x] Implement Telegram polling, chat filtering, and URL extraction in code + tests -> Phase 2
+- [x] Implement content fetching with timeout guards and failure records -> Phase 3
 - [ ] Verify Gemini native YouTube URL processing in Phase 4 before building full YouTube path
 - [ ] Decide `parse_mode` (Markdown v1 vs HTML) before Phase 5 delivery implementation
 
@@ -91,7 +93,7 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 
 ## Blockers
 
-- Manual setup required: Telegram bot/token + GitHub Secrets + Gemini API key before live workflow verification can pass (see `.planning/phases/01-infrastructure-bot-setup/01-USER-SETUP.md`).
+None.
 
 ---
 
@@ -100,8 +102,7 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 ### To resume this project:
 1. Read `.planning/ROADMAP.md` — current phase and success criteria
 2. Read `.planning/STATE.md` (this file) — decisions, pitfalls, todos
-3. Complete manual setup checklist in `.planning/phases/01-infrastructure-bot-setup/01-USER-SETUP.md`
-4. Run workflow dispatch for `digest` with `test_push=true` and verify `getMe`, `deleteWebhook`, `getUpdates` steps pass
+3. Run `/gsd-plan-phase 4` to start Gemini summarization implementation
 
 ### Planning artifacts:
 - `.planning/PROJECT.md` — project goals and constraints

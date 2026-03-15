@@ -22,9 +22,9 @@
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Infrastructure & Bot Setup | 2/3 | In progress | - |
-| 2. Telegram Polling Client | 0/? | Not started | - |
-| 3. Content Fetching | 0/? | Not started | - |
+| 1. Infrastructure & Bot Setup | 3/3 | Completed | 2026-03-15 |
+| 2. Telegram Polling Client | 2/2 | Completed | 2026-03-15 |
+| 3. Content Fetching | 2/2 | Completed | 2026-03-15 |
 | 4. Gemini Summarization | 0/? | Not started | - |
 | 5. Digest Generation & Delivery | 0/? | Not started | - |
 | 6. Pipeline Orchestration & Git Integration | 0/? | Not started | - |
@@ -45,7 +45,7 @@
 **Plans:** 3 plans
 - [x] `01-01-PLAN.md` — Scaffold required directories and pin exact dependencies
 - [x] `01-02-PLAN.md` — Create workflow triggers and CI guardrails (permissions, checkout, concurrency)
-- [ ] `01-03-PLAN.md` — Wire secrets and complete Telegram setup validation checkpoint
+- [x] `01-03-PLAN.md` — Wire secrets and complete Telegram setup validation checkpoint
 
 ### Phase 2: Telegram Polling Client
 **Goal:** The pipeline can retrieve new Telegram messages, extract URLs from message text, filter by chat ID, and correctly persist the polling offset so no message is processed twice.
@@ -56,7 +56,9 @@
   2. `state.json` in the repository root contains `last_update_id + 1` (not `last_update_id`) after a successful poll
   3. Messages from a chat ID not matching `ALLOWED_CHAT_ID` are silently ignored and do not appear in the URL list
   4. URLs embedded in surrounding text (e.g., "check this out https://example.com good stuff") are correctly extracted by regex
-**Plans:** TBD
+**Plans:** 2 plans
+- [x] `02-01-PLAN.md` — Implement Telegram polling client and state offset persistence
+- [x] `02-02-PLAN.md` — Add URL extraction/chat filtering tests and wire polling into entrypoint/CI
 
 ### Phase 3: Content Fetching
 **Goal:** The pipeline can classify a URL as article or YouTube, fetch and extract article content via trafilatura with mandatory timeouts, and write a failure record for any URL that cannot be fetched — without aborting the pipeline.
@@ -66,7 +68,9 @@
   1. A valid article URL returns extracted main-body text (not HTML boilerplate); a YouTube URL is classified separately and not passed to trafilatura
   2. A URL that times out (or returns 403/paywall/empty content) produces a Markdown file in `data/failed/YYYY-MM-DD/slug.md` and the fetcher returns control to the caller — the pipeline does not abort
   3. All HTTP requests complete within the configured hard timeout (`timeout=(10, 30)`) — no request can hang indefinitely
-**Plans:** TBD
+**Plans:** 2 plans
+- [x] `03-01-PLAN.md` — Implement URL classification and article extraction with hard timeouts
+- [x] `03-02-PLAN.md` — Add failure-record behavior and content fetcher tests
 
 ### Phase 4: Gemini Summarization
 **Goal:** The pipeline can summarize article text and YouTube URLs via Gemini 2.0 Flash using prompt files, handle rate limits gracefully, and write each summary as a dated Markdown file — without SDK import errors or silent safety-block failures.
@@ -108,26 +112,26 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INFRA-01 | Phase 1 | Pending |
-| INFRA-02 | Phase 1 | Pending |
-| INFRA-03 | Phase 1 | Pending |
-| INFRA-04 | Phase 1 | Pending |
-| INFRA-05 | Phase 1 | Pending |
-| INFRA-06 | Phase 1 | Pending |
-| INFRA-07 | Phase 1 | Pending |
-| BOT-01 | Phase 1 | Pending |
-| BOT-02 | Phase 1 | Pending |
-| BOT-03 | Phase 1 | Pending |
-| POLL-01 | Phase 2 | Pending |
-| POLL-02 | Phase 2 | Pending |
-| POLL-03 | Phase 2 | Pending |
-| POLL-04 | Phase 2 | Pending |
-| POLL-05 | Phase 2 | Pending |
-| POLL-06 | Phase 2 | Pending |
-| FETCH-01 | Phase 3 | Pending |
-| FETCH-02 | Phase 3 | Pending |
-| FETCH-03 | Phase 3 | Pending |
-| FETCH-04 | Phase 3 | Pending |
+| INFRA-01 | Phase 1 | Completed |
+| INFRA-02 | Phase 1 | Completed |
+| INFRA-03 | Phase 1 | Completed |
+| INFRA-04 | Phase 1 | Completed |
+| INFRA-05 | Phase 1 | Completed |
+| INFRA-06 | Phase 1 | Completed |
+| INFRA-07 | Phase 1 | Completed |
+| BOT-01 | Phase 1 | Completed |
+| BOT-02 | Phase 1 | Completed |
+| BOT-03 | Phase 1 | Completed |
+| POLL-01 | Phase 2 | Completed |
+| POLL-02 | Phase 2 | Completed |
+| POLL-03 | Phase 2 | Completed |
+| POLL-04 | Phase 2 | Completed |
+| POLL-05 | Phase 2 | Completed |
+| POLL-06 | Phase 2 | Completed |
+| FETCH-01 | Phase 3 | Completed |
+| FETCH-02 | Phase 3 | Completed |
+| FETCH-03 | Phase 3 | Completed |
+| FETCH-04 | Phase 3 | Completed |
 | SUM-01 | Phase 4 | Pending |
 | SUM-02 | Phase 4 | Pending |
 | SUM-03 | Phase 4 | Pending |

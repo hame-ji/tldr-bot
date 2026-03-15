@@ -40,6 +40,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -p "test_*.py"
+
       - name: Validate required secrets
         run: |
           test -n "$TELEGRAM_BOT_TOKEN"

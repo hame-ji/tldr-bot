@@ -1,9 +1,21 @@
 from datetime import datetime, timezone
 
+from content_fetcher import fetch_urls
+from telegram_client import poll_urls_from_env
+
 
 def main() -> None:
     timestamp = datetime.now(timezone.utc).isoformat()
-    print(f"tldr-bot pipeline placeholder run at {timestamp}")
+    result = poll_urls_from_env()
+    print(f"tldr-bot polling run at {timestamp}")
+    print(f"updates={result['update_count']} previous_offset={result['previous_offset']} next_offset={result['next_offset']}")
+
+    fetch_results = fetch_urls(result["urls"])
+    for item in fetch_results:
+        if item["status"] == "ok":
+            print(f"ok:{item['kind']}:{item['url']}")
+        else:
+            print(f"failed:{item['url']} -> {item['failure_path']}")
 
 
 if __name__ == "__main__":

@@ -52,7 +52,7 @@ jobs:
       - name: Validate Telegram bot token and clear webhook
         run: |
           curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" >/tmp/getme.json
-          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook?drop_pending_updates=true" >/tmp/delete_webhook.json
+          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook?drop_pending_updates=false" >/tmp/delete_webhook.json
 
       - name: Validate polling endpoint
         run: |

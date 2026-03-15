@@ -13,8 +13,8 @@
 - [ ] **Phase 2: Telegram Polling Client** - Correct offset-based polling with state.json persistence and ALLOWED_CHAT_ID filtering
 - [ ] **Phase 3: Content Fetching** - URL classification, article extraction via trafilatura, timeout safety, and failure records
 - [ ] **Phase 4: Gemini Summarization** - AI summarization for articles and YouTube URLs with prompt file control and rate-limit resilience
-- [ ] **Phase 5: Digest Generation & Delivery** - Daily digest assembled and chunked for Telegram delivery, with failure section and empty-day guard
-- [ ] **Phase 6: Pipeline Orchestration & Git Integration** - Full pipeline wired via main.py, amend-or-create commit strategy, and end-to-end verified run
+- [x] **Phase 5: Digest Generation & Delivery** - Daily digest assembled and chunked for Telegram delivery, with failure section and empty-day guard
+- [x] **Phase 6: Pipeline Orchestration & Git Integration** - Full pipeline wired via main.py, amend-or-create commit strategy, and end-to-end verified run
 
 ---
 
@@ -26,8 +26,8 @@
 | 2. Telegram Polling Client | 2/2 | Completed | 2026-03-15 |
 | 3. Content Fetching | 2/2 | Completed | 2026-03-15 |
 | 4. Gemini Summarization | 2/2 | Completed | 2026-03-15 |
-| 5. Digest Generation & Delivery | 0/? | Not started | - |
-| 6. Pipeline Orchestration & Git Integration | 0/? | Not started | - |
+| 5. Digest Generation & Delivery | 2/2 | Completed | 2026-03-15 |
+| 6. Pipeline Orchestration & Git Integration | 2/2 | Completed | 2026-03-15 |
 
 ---
 
@@ -95,7 +95,9 @@
   3. Failed URLs appear in a dedicated section of the digest (user can see what didn't process)
   4. On a day with no URLs sent, no digest is generated, no Telegram message is sent, and no commit is made
   5. Changing `prompts/digest.txt` changes the digest format without any code changes
-**Plans:** TBD
+**Plans:** 2 plans
+- [x] `05-01-PLAN.md` — Implement digest assembly module with prompt-file formatting and failed URL section
+- [x] `05-02-PLAN.md` — Add chunked Telegram delivery and empty-day no-send guard
 
 ### Phase 6: Pipeline Orchestration & Git Integration
 **Goal:** All modules are wired together through main.py with per-URL failure isolation; the GitHub Actions workflow commits all outputs using an amend-or-create-per-day strategy; and a complete end-to-end run (cron or manual) succeeds in the Actions environment.
@@ -106,7 +108,9 @@
   2. Running the pipeline twice on the same day (manual re-trigger) produces one amended commit — not two commits — and the digest reflects all URLs from both runs
   3. `--force-with-lease` push succeeds after the amend; no force-push conflicts occur in the standard single-user workflow
   4. A URL that causes an unhandled exception in any module writes a failure record and allows the pipeline to continue processing remaining URLs
-**Plans:** TBD
+**Plans:** 2 plans
+- [x] `06-01-PLAN.md` — Add orchestration run-outcome signaling and tests for commit gating
+- [x] `06-02-PLAN.md` — Implement workflow daily commit/amend strategy with `--force-with-lease` push
 
 ---
 
@@ -139,16 +143,16 @@
 | SUM-03 | Phase 4 | Completed |
 | SUM-04 | Phase 4 | Completed |
 | SUM-05 | Phase 4 | Completed |
-| DGST-01 | Phase 5 | Pending |
-| DGST-02 | Phase 5 | Pending |
-| DGST-03 | Phase 5 | Pending |
-| DGST-04 | Phase 5 | Pending |
-| DGST-05 | Phase 5 | Pending |
-| DGST-06 | Phase 5 | Pending |
-| STOR-01 | Phase 6 | Pending |
-| STOR-02 | Phase 6 | Pending |
-| STOR-03 | Phase 6 | Pending |
-| STOR-04 | Phase 6 | Pending |
+| DGST-01 | Phase 5 | Completed |
+| DGST-02 | Phase 5 | Completed |
+| DGST-03 | Phase 5 | Completed |
+| DGST-04 | Phase 5 | Completed |
+| DGST-05 | Phase 5 | Completed |
+| DGST-06 | Phase 5 | Completed |
+| STOR-01 | Phase 6 | Completed |
+| STOR-02 | Phase 6 | Completed |
+| STOR-03 | Phase 6 | Completed |
+| STOR-04 | Phase 6 | Completed |
 
 **Coverage:** 34/34 v1 requirements mapped ✓
 

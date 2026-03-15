@@ -1,4 +1,5 @@
 import json
+import html
 import os
 import re
 from pathlib import Path
@@ -109,3 +110,78 @@ def poll_urls_from_env(state_path: Union[str, Path] = "state.json") -> dict[str,
         raise RuntimeError("TELEGRAM_CHAT_ID must be an integer") from exc
 
     return poll_urls(bot_token=bot_token, allowed_chat_id=allowed_chat_id, state_path=state_path)
+
+
+def _split_long_text(text: str, max_length: int) -> list[str]:
+    return [text[start : start + max_length] for start in range(0, len(text), max_length)]
+
+
+def chunk_text_by_paragraph(text: str, max_length: int = 4096) -> list[str]:
+    if not text:
+        return []
+
+    paragraphs = text.split("\n\n")
+    chunks: list[str] = []
+    current = ""
+
+    for paragraph in paragraphs:
+        escaped_paragraph = html.escape(paragraph, quote=False)
+
+        if len(escaped_paragraph) > max_length:
+            if current:
+                chunks.append(current)
+                current = ""
+            chunks.extend(_split_long_text(escaped_paragraph, max_length=max_length))
+            continue
+
+        candidate = escaped_paragraph if not current else current + "\n\n" + escaped_paragraph
+        if len(candidate) <= max_length:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+            current = escaped_paragraph
+
+    if current:
+        chunks.append(current)
+
+    return chunks
+
+
+def send_digest(
+    bot_token: str,
+    chat_id: int,
+    digest_text: str,
+    parse_mode: str = "HTML",
+    max_chunk_length: int = 4096,
+) -> list[dict[str, Any]]:
+    chunks = chunk_text_by_paragraph(digest_text, max_length=max_chunk_length)
+    responses: list[dict[str, Any]] = []
+
+    for chunk in chunks:
+        params: dict[str, Any] = {
+            "chat_id": chat_id,
+            "text": chunk,
+        }
+        if parse_mode:
+            params["parse_mode"] = parse_mode
+        responses.append(_telegram_api_get(bot_token, "sendMessage", params))
+
+    return responses
+
+
+def send_digest_from_env(digest_text: str) -> list[dict[str, Any]]:
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id_raw = os.environ.get("TELEGRAM_CHAT_ID")
+
+    if not bot_token:
+        raise RuntimeError("Missing TELEGRAM_BOT_TOKEN environment variable")
+    if not chat_id_raw:
+        raise RuntimeError("Missing TELEGRAM_CHAT_ID environment variable")
+
+    try:
+        chat_id = int(chat_id_raw)
+    except ValueError as exc:
+        raise RuntimeError("TELEGRAM_CHAT_ID must be an integer") from exc
+
+    return send_digest(bot_token=bot_token, chat_id=chat_id, digest_text=digest_text)

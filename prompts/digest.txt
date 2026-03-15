@@ -1,0 +1,7 @@
+# Daily Research Digest - {{date}}
+
+Processed: {{summary_count}} successful, {{failure_count}} failed
+
+{{summaries}}
+
+{{failed_urls_section}}

@@ -101,7 +101,12 @@ User -> Telegram Bot
 
 **Why we didn't:** External state adds a dependency, credentials to manage, and a failure mode. A committed file is durable, inspectable, and version-controlled. If something goes wrong, the state is visible in the Git log. The single-daily-run model means there is no meaningful concurrency risk - the concurrency guard in the workflow (`cancel-in-progress: false`) ensures only one execution runs at a time.
 
-The commit strategy is intentionally simple: if a commit already exists for that day, amend it. This keeps history clean - one commit per day, date-keyed, regardless of whether the run was triggered by cron or manually.
+The commit strategy is intentionally simple: if the latest commit is the same-day digest commit, amend it; otherwise create a new digest commit for that day. This keeps history clean - one digest commit per UTC day in the normal rerun flow, regardless of whether the run was triggered by cron or manually.
+
+The workflow follows three guardrails:
+- Empty-day runs (no URLs processed) skip commit and push entirely.
+- Same-day reruns use `git commit --amend` + `git push --force-with-lease`.
+- First run of a day uses a normal `git commit` + `git push`.
 
 ---
 

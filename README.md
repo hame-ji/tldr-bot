@@ -41,7 +41,7 @@ User -> Telegram Bot
    |-- Filter messages by TELEGRAM_CHAT_ID
    |-- Extract URLs
    |-- Fetch article content (trafilatura)
-   |-- Summarize via OpenRouter (free-model discovery + fallback)
+   |-- Summarize via OpenRouter (preferred models + openrouter/free fallback)
    |-- Write summaries to data/sources/YYYY-MM-DD/
    |-- Write failures to data/failed/YYYY-MM-DD/
    |-- Generate digest at data/digests/YYYY-MM-DD.md

@@ -25,12 +25,11 @@ jobs:
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       OPENROUTER_API_BASE: "https://openrouter.ai/api/v1"
-      OPENROUTER_PREFERRED_MODELS: "google/gemma-3-27b-it:free,qwen/qwen3-32b:free,deepseek/deepseek-r1:free"
+      OPENROUTER_PREFERRED_MODELS: ${{ vars.OPENROUTER_PREFERRED_MODELS }}
       OPENROUTER_MIN_SPACING_SECONDS: "2"
       OPENROUTER_MAX_RETRIES: "8"
       OPENROUTER_INITIAL_BACKOFF_SECONDS: "10"
       OPENROUTER_MAX_BACKOFF_SECONDS: "180"
-      OPENROUTER_MODELS_CACHE_TTL_SECONDS: "21600"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6

@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
-from src.summarizer import _order_models, _source_output_path, summarize_item, summarize_items
+from src.summarizer import OpenRouterSummarizer, _source_output_path, summarize_item, summarize_items
 
 
 class _FakeSummarizer:
@@ -88,8 +88,6 @@ class SummarizerTests(unittest.TestCase):
                 "OPENROUTER_MAX_RETRIES",
                 "OPENROUTER_INITIAL_BACKOFF_SECONDS",
                 "OPENROUTER_MAX_BACKOFF_SECONDS",
-                "OPENROUTER_MODELS_CACHE_PATH",
-                "OPENROUTER_MODELS_CACHE_TTL_SECONDS",
             ]
         }
 
@@ -101,8 +99,6 @@ class SummarizerTests(unittest.TestCase):
             os.environ["OPENROUTER_MAX_RETRIES"] = "7"
             os.environ["OPENROUTER_INITIAL_BACKOFF_SECONDS"] = "6"
             os.environ["OPENROUTER_MAX_BACKOFF_SECONDS"] = "90"
-            os.environ["OPENROUTER_MODELS_CACHE_PATH"] = str(Path(tmpdir) / "models.json")
-            os.environ["OPENROUTER_MODELS_CACHE_TTL_SECONDS"] = "123"
 
             try:
                 results = summarize_items(
@@ -128,22 +124,43 @@ class SummarizerTests(unittest.TestCase):
                 max_retries=7,
                 initial_backoff_seconds=6.0,
                 max_backoff_seconds=90.0,
-                models_cache_path=str(Path(tmpdir) / "models.json"),
-                models_cache_ttl_seconds=123,
             )
 
-    def test_order_models_prefers_user_picks_then_quality(self) -> None:
-        models = [
-            {"id": "vendor/basic-model", "context_length": 4096, "pricing": {"prompt": "0", "completion": "0"}},
-            {"id": "vendor/pro-model:free", "context_length": 32768},
-            {"id": "vendor/paid-model", "context_length": 32768, "pricing": {"prompt": "0.1", "completion": "0.1"}},
-        ]
+    def test_openrouter_models_append_openrouter_free_fallback(self) -> None:
+        summarizer = OpenRouterSummarizer(
+            api_key="key",
+            preferred_models=[
+                "meta-llama/llama-3.3-70b-instruct:free",
+                "nousresearch/hermes-3-llama-3.1-405b:free",
+            ],
+        )
 
-        ordered = _order_models(models, preferred_models=["vendor/basic-model"])
+        ordered = summarizer._models()
 
-        self.assertEqual(ordered[0], "vendor/basic-model")
-        self.assertIn("vendor/pro-model:free", ordered)
-        self.assertNotIn("vendor/paid-model", ordered)
+        self.assertEqual(
+            ordered,
+            [
+                "meta-llama/llama-3.3-70b-instruct:free",
+                "nousresearch/hermes-3-llama-3.1-405b:free",
+                "openrouter/free",
+            ],
+        )
+
+    def test_openrouter_models_dedupe_openrouter_free(self) -> None:
+        summarizer = OpenRouterSummarizer(
+            api_key="key",
+            preferred_models=["openrouter/free", "meta-llama/llama-3.3-70b-instruct:free"],
+        )
+
+        ordered = summarizer._models()
+
+        self.assertEqual(
+            ordered,
+            [
+                "openrouter/free",
+                "meta-llama/llama-3.3-70b-instruct:free",
+            ],
+        )
 
 
 if __name__ == "__main__":

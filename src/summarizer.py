@@ -1,4 +1,3 @@
-import json
 import os
 import random
 import re
@@ -95,112 +94,17 @@ class _RetryingSummarizerBase:
         raise RuntimeError(error_prefix + ": " + str(last_error)) from last_error
 
 
-def _is_zero_price(value: Any) -> bool:
-    if value is None:
-        return False
-    try:
-        return float(str(value).strip()) == 0.0
-    except ValueError:
-        return False
-
-
-def _is_free_openrouter_model(model: dict[str, Any]) -> bool:
-    model_id = model.get("id")
-    if isinstance(model_id, str) and model_id.endswith(":free"):
-        return True
-
-    pricing = model.get("pricing")
-    if not isinstance(pricing, dict):
-        return False
-
-    prompt_price = pricing.get("prompt")
-    completion_price = pricing.get("completion")
-    return _is_zero_price(prompt_price) and _is_zero_price(completion_price)
-
-
-def _model_quality_score(model_id: str, context_length: int) -> tuple[int, int]:
-    text = model_id.lower()
-    heuristic = 0
-    if "gemini" in text:
-        heuristic += 5
-    if "qwen" in text:
-        heuristic += 4
-    if "deepseek" in text:
-        heuristic += 4
-    if "llama" in text:
-        heuristic += 3
-    if "instruct" in text:
-        heuristic += 2
-    return (heuristic, context_length)
-
-
-def _order_models(models: list[dict[str, Any]], preferred_models: list[str]) -> list[str]:
-    free_models: list[tuple[tuple[int, int], str]] = []
-    for model in models:
-        model_id = model.get("id")
-        if not isinstance(model_id, str):
-            continue
-        if not _is_free_openrouter_model(model):
-            continue
-
-        context_length_raw = model.get("context_length", 0)
-        try:
-            context_length = int(context_length_raw)
-        except (TypeError, ValueError):
-            context_length = 0
-
-        free_models.append((_model_quality_score(model_id, context_length), model_id))
-
-    if not free_models:
-        return []
-
-    free_model_ids = {model_id for _, model_id in free_models}
+def _merge_preferred_models(preferred_models: list[str], fallback_models: list[str]) -> list[str]:
     ordered: list[str] = []
-    for preferred in preferred_models:
-        if preferred in free_model_ids and preferred not in ordered:
-            ordered.append(preferred)
+    seen: set[str] = set()
 
-    for _, model_id in sorted(free_models, key=lambda item: item[0], reverse=True):
-        if model_id not in ordered:
-            ordered.append(model_id)
+    for model_name in preferred_models + fallback_models:
+        if not model_name or model_name in seen:
+            continue
+        ordered.append(model_name)
+        seen.add(model_name)
 
     return ordered
-
-
-def _load_cached_models(cache_path: str, ttl_seconds: int) -> list[str]:
-    path = Path(cache_path)
-    if not path.exists():
-        return []
-
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return []
-
-    if not isinstance(payload, dict):
-        return []
-
-    fetched_at = payload.get("fetched_at")
-    models = payload.get("models")
-    if not isinstance(fetched_at, (int, float)):
-        return []
-    if not isinstance(models, list) or not all(isinstance(item, str) for item in models):
-        return []
-
-    if time.time() - float(fetched_at) > ttl_seconds:
-        return []
-
-    return models
-
-
-def _save_cached_models(cache_path: str, models: list[str]) -> None:
-    path = Path(cache_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "fetched_at": time.time(),
-        "models": models,
-    }
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def _extract_openrouter_text(payload: dict[str, Any]) -> str:
@@ -229,8 +133,6 @@ class OpenRouterSummarizer(_RetryingSummarizerBase):
         prompt_path: str = "prompts/summarize.txt",
         base_url: str = "https://openrouter.ai/api/v1",
         preferred_models: Optional[list[str]] = None,
-        models_cache_path: str = "data/cache/openrouter_models.json",
-        models_cache_ttl_seconds: int = 21600,
         min_spacing_seconds: float = 1.0,
         max_retries: int = 6,
         initial_backoff_seconds: float = 5.0,
@@ -239,8 +141,6 @@ class OpenRouterSummarizer(_RetryingSummarizerBase):
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.preferred_models = preferred_models or []
-        self.models_cache_path = models_cache_path
-        self.models_cache_ttl_seconds = models_cache_ttl_seconds
         self._ordered_models: Optional[list[str]] = None
         super().__init__(
             prompt_path=prompt_path,
@@ -250,38 +150,12 @@ class OpenRouterSummarizer(_RetryingSummarizerBase):
             max_backoff_seconds=max_backoff_seconds,
         )
 
-    def _discover_free_models(self) -> list[str]:
-        cached_models = _load_cached_models(self.models_cache_path, self.models_cache_ttl_seconds)
-        if cached_models:
-            return cached_models
-
-        response = requests.get(
-            self.base_url + "/models",
-            headers={"Authorization": "Bearer " + self.api_key},
-            timeout=(10, 30),
-        )
-        if response.status_code >= 400:
-            raise RuntimeError(f"OpenRouter model discovery failed ({response.status_code}): {response.text[:300]}")
-
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise RuntimeError("OpenRouter model discovery returned invalid JSON") from exc
-
-        model_objects = payload.get("data")
-        if not isinstance(model_objects, list):
-            raise RuntimeError("OpenRouter model discovery response missing data list")
-
-        ordered = _order_models(model_objects, self.preferred_models)
-        if not ordered:
-            raise RuntimeError("No free OpenRouter models available")
-
-        _save_cached_models(self.models_cache_path, ordered)
-        return ordered
-
     def _models(self) -> list[str]:
         if self._ordered_models is None:
-            self._ordered_models = self._discover_free_models()
+            self._ordered_models = _merge_preferred_models(
+                self.preferred_models,
+                ["openrouter/free"],
+            )
         return self._ordered_models
 
     def _generate_once(self, prompt: str, contents: list[str]) -> str:
@@ -410,8 +284,6 @@ def summarize_items(
     max_retries = int(os.environ.get("OPENROUTER_MAX_RETRIES", "6"))
     initial_backoff_seconds = float(os.environ.get("OPENROUTER_INITIAL_BACKOFF_SECONDS", "5"))
     max_backoff_seconds = float(os.environ.get("OPENROUTER_MAX_BACKOFF_SECONDS", "120"))
-    models_cache_path = os.environ.get("OPENROUTER_MODELS_CACHE_PATH", "data/cache/openrouter_models.json")
-    models_cache_ttl_seconds = int(os.environ.get("OPENROUTER_MODELS_CACHE_TTL_SECONDS", "21600"))
 
     summarizer = OpenRouterSummarizer(
         api_key=api_key,
@@ -421,8 +293,6 @@ def summarize_items(
         max_retries=max_retries,
         initial_backoff_seconds=initial_backoff_seconds,
         max_backoff_seconds=max_backoff_seconds,
-        models_cache_path=models_cache_path,
-        models_cache_ttl_seconds=models_cache_ttl_seconds,
     )
 
     results = []

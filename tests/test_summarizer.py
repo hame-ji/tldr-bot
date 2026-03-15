@@ -61,8 +61,16 @@ class SummarizerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             old_key = os.environ.get("GEMINI_API_KEY")
             old_model = os.environ.get("GEMINI_MODEL")
+            old_spacing = os.environ.get("GEMINI_MIN_SPACING_SECONDS")
+            old_retries = os.environ.get("GEMINI_MAX_RETRIES")
+            old_initial_backoff = os.environ.get("GEMINI_INITIAL_BACKOFF_SECONDS")
+            old_max_backoff = os.environ.get("GEMINI_MAX_BACKOFF_SECONDS")
             os.environ["GEMINI_API_KEY"] = "test-key"
             os.environ["GEMINI_MODEL"] = "gemini-2.0-flash"
+            os.environ["GEMINI_MIN_SPACING_SECONDS"] = "1"
+            os.environ["GEMINI_MAX_RETRIES"] = "6"
+            os.environ["GEMINI_INITIAL_BACKOFF_SECONDS"] = "5"
+            os.environ["GEMINI_MAX_BACKOFF_SECONDS"] = "120"
             try:
                 results = summarize_items(
                     items=[{"status": "ok", "kind": "youtube", "url": "https://youtu.be/abc"}],
@@ -79,6 +87,22 @@ class SummarizerTests(unittest.TestCase):
                     os.environ.pop("GEMINI_MODEL", None)
                 else:
                     os.environ["GEMINI_MODEL"] = old_model
+                if old_spacing is None:
+                    os.environ.pop("GEMINI_MIN_SPACING_SECONDS", None)
+                else:
+                    os.environ["GEMINI_MIN_SPACING_SECONDS"] = old_spacing
+                if old_retries is None:
+                    os.environ.pop("GEMINI_MAX_RETRIES", None)
+                else:
+                    os.environ["GEMINI_MAX_RETRIES"] = old_retries
+                if old_initial_backoff is None:
+                    os.environ.pop("GEMINI_INITIAL_BACKOFF_SECONDS", None)
+                else:
+                    os.environ["GEMINI_INITIAL_BACKOFF_SECONDS"] = old_initial_backoff
+                if old_max_backoff is None:
+                    os.environ.pop("GEMINI_MAX_BACKOFF_SECONDS", None)
+                else:
+                    os.environ["GEMINI_MAX_BACKOFF_SECONDS"] = old_max_backoff
 
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0]["status"], "ok")

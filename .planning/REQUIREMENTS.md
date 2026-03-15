@@ -9,7 +9,7 @@
 
 - [x] **INFRA-01**: GitHub repository is scaffolded with the required directory structure (`data/`, `prompts/`, `src/`)
 - [x] **INFRA-02**: `requirements.txt` pins all dependencies with exact versions (`pyTelegramBotAPI`, `google-genai`, `trafilatura`, `requests`, `python-slugify`)
-- [x] **INFRA-03**: GitHub Secrets are configured (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GEMINI_API_KEY`)
+- [x] **INFRA-03**: GitHub Secrets are configured (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `OPENROUTER_API_KEY`)
 - [x] **INFRA-04**: GitHub Actions workflow `digest.yml` is created with daily cron trigger (07:00 UTC) and manual dispatch
 - [x] **INFRA-05**: Workflow declares `permissions: contents: write` to allow `GITHUB_TOKEN` push
 - [x] **INFRA-06**: Workflow uses `fetch-depth: 0` on checkout to support amend-commit strategy
@@ -39,11 +39,11 @@
 
 ### Summarization
 
-- [x] **SUM-01**: Article content is summarized via Gemini 2.0 Flash using the `google-genai` SDK (not deprecated `google-generativeai`)
-- [x] **SUM-02**: YouTube URLs are passed natively to Gemini for processing (no yt-dlp or transcript extraction)
+- [x] **SUM-01**: Article content is summarized via OpenRouter using free-model selection with cached model discovery
+- [x] **SUM-02**: YouTube URLs are summarized from transcript content fetched via `youtube-transcript-api` (strict fail if transcript unavailable)
 - [x] **SUM-03**: Summarization behavior is controlled by a prompt file (`prompts/summarize.txt`) — not hardcoded
 - [x] **SUM-04**: Each summary is written to `data/sources/YYYY-MM-DD/slug.md` as a Markdown file
-- [x] **SUM-05**: Gemini API calls include `time.sleep(1)` spacing and 429 retry logic to handle rate limits
+- [x] **SUM-05**: OpenRouter API calls include request spacing and retry logic to handle rate limits across free-model fallbacks
 
 ### Digest & Delivery
 
@@ -89,7 +89,7 @@
 | Real-time / webhook processing | Fundamentally incompatible with serverless batch model |
 | Persistent server / VPS / hosted bot | Contradicts the zero-infrastructure design axiom |
 | Mobile or web UI | Not needed; Telegram is the interface |
-| Video download (yt-dlp + Whisper) | Eliminated by Gemini native YouTube processing |
+| Video download (yt-dlp + Whisper) | Deferred while transcript-grounded summarization via `youtube-transcript-api` meets v1 goals |
 | External databases or state stores | Filesystem + Git is the database |
 
 ## Traceability
@@ -116,11 +116,11 @@
 | FETCH-02 | Phase 3 — Content Fetching | Pending |
 | FETCH-03 | Phase 3 — Content Fetching | Pending |
 | FETCH-04 | Phase 3 — Content Fetching | Pending |
-| SUM-01 | Phase 4 — Gemini Summarization | Pending |
-| SUM-02 | Phase 4 — Gemini Summarization | Pending |
-| SUM-03 | Phase 4 — Gemini Summarization | Pending |
-| SUM-04 | Phase 4 — Gemini Summarization | Pending |
-| SUM-05 | Phase 4 — Gemini Summarization | Pending |
+| SUM-01 | Phase 4 — OpenRouter Summarization | Pending |
+| SUM-02 | Phase 4 — OpenRouter Summarization | Pending |
+| SUM-03 | Phase 4 — OpenRouter Summarization | Pending |
+| SUM-04 | Phase 4 — OpenRouter Summarization | Pending |
+| SUM-05 | Phase 4 — OpenRouter Summarization | Pending |
 | DGST-01 | Phase 5 — Digest Generation & Delivery | Pending |
 | DGST-02 | Phase 5 — Digest Generation & Delivery | Pending |
 | DGST-03 | Phase 5 — Digest Generation & Delivery | Pending |

@@ -12,7 +12,7 @@
 - [ ] **Phase 1: Infrastructure & Bot Setup** - Repo scaffold, GitHub Secrets, verified bot token, and workflow that can push commits
 - [ ] **Phase 2: Telegram Polling Client** - Correct offset-based polling with state.json persistence and ALLOWED_CHAT_ID filtering
 - [ ] **Phase 3: Content Fetching** - URL classification, article extraction via trafilatura, timeout safety, and failure records
-- [ ] **Phase 4: Gemini Summarization** - AI summarization for articles and YouTube URLs with prompt file control and rate-limit resilience
+- [ ] **Phase 4: OpenRouter Summarization** - AI summarization for articles and transcript-grounded YouTube inputs with prompt file control and rate-limit resilience
 - [x] **Phase 5: Digest Generation & Delivery** - Daily digest assembled and chunked for Telegram delivery, with failure section and empty-day guard
 - [x] **Phase 6: Pipeline Orchestration & Git Integration** - Full pipeline wired via main.py, amend-or-create commit strategy, and end-to-end verified run
 
@@ -25,7 +25,7 @@
 | 1. Infrastructure & Bot Setup | 3/3 | Completed | 2026-03-15 |
 | 2. Telegram Polling Client | 2/2 | Completed | 2026-03-15 |
 | 3. Content Fetching | 2/2 | Completed | 2026-03-15 |
-| 4. Gemini Summarization | 2/2 | Completed | 2026-03-15 |
+| 4. OpenRouter Summarization | 2/2 | Completed | 2026-03-15 |
 | 5. Digest Generation & Delivery | 2/2 | Completed | 2026-03-15 |
 | 6. Pipeline Orchestration & Git Integration | 2/2 | Completed | 2026-03-15 |
 
@@ -72,17 +72,17 @@
 - [x] `03-01-PLAN.md` — Implement URL classification and article extraction with hard timeouts
 - [x] `03-02-PLAN.md` — Add failure-record behavior and content fetcher tests
 
-### Phase 4: Gemini Summarization
-**Goal:** The pipeline can summarize article text and YouTube URLs via Gemini 2.5 Flash using prompt files, handle rate limits gracefully, and write each summary as a dated Markdown file — without SDK import errors or silent safety-block failures.
+### Phase 4: OpenRouter Summarization
+**Goal:** The pipeline can summarize article text and transcript-grounded YouTube content via OpenRouter free models using prompt files, handle rate limits gracefully, and write each summary as a dated Markdown file.
 **Depends on:** Phase 3
 **Requirements:** SUM-01, SUM-02, SUM-03, SUM-04, SUM-05
 **Success Criteria** (what must be TRUE):
   1. A real article URL produces a summary written to `data/sources/YYYY-MM-DD/slug.md` using the behavior defined in `prompts/summarize.txt`
-  2. A YouTube URL is summarized natively by Gemini (no yt-dlp or transcript extraction) and produces a source file in the same format
-  3. When the Gemini API returns a 429, the pipeline retries with backoff and eventually succeeds (or writes to `data/failed/` after exhausting retries) — it does not crash
+  2. A YouTube URL is summarized from transcript text fetched with `youtube-transcript-api`; missing transcripts are written to `data/failed/`
+  3. When OpenRouter returns 429/rate-limit errors, the pipeline retries with backoff and model fallback and eventually succeeds (or writes to `data/failed/`) — it does not crash
   4. Changing `prompts/summarize.txt` changes the summary output without any code changes
 **Plans:** 2 plans
-- [x] `04-01-PLAN.md` — Implement Gemini summarizer wrapper and prompt-file control
+- [x] `04-01-PLAN.md` — Implement OpenRouter summarizer wrapper and prompt-file control
 - [x] `04-02-PLAN.md` — Persist summaries and add summarizer failure-handling tests
 
 ### Phase 5: Digest Generation & Delivery

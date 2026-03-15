@@ -66,7 +66,7 @@ User -> Telegram Bot
 | Telegram Bot | Ingestion interface + delivery channel | Ubiquitous, zero-friction, API-first |
 | GitHub Actions | Execution runtime + scheduler | Free, ephemeral, no ops burden |
 | GitHub Repository | Storage + version history | Durable, browsable, diffable |
-| Gemini 2.5 Flash | Summarization + YouTube processing | Current default model with native YouTube URL support and fallback model failover |
+| OpenRouter (free models) | Summarization provider | Dynamic free-model discovery with cached selection and fallback rotation |
 | `state.json` | Telegram polling cursor | Single-field, committed, auditable |
 
 ---
@@ -130,13 +130,13 @@ The workflow follows three guardrails:
 
 ---
 
-### 6. Gemini native YouTube processing
+### 6. Transcript-grounded YouTube summarization
 
-**Decision:** YouTube URLs are passed directly to Gemini 2.5 Flash, which processes them natively. No transcript extraction.
+**Decision:** YouTube videos are summarized from transcripts fetched with `youtube-transcript-api`, then sent to OpenRouter free models for summarization.
 
-**Alternative considered:** `yt-dlp` + Whisper transcription + summarization; YouTube Data API for metadata.
+**Alternative considered:** Native model URL summarization without transcript fetch.
 
-**Why we didn't:** Gemini's native YouTube support eliminates an entire infrastructure layer - no audio download, no transcription model, no storage for audio files. For an MVP targeting a single user with 1-10 URLs per day, the simplicity gain is significant. The risk (dependency on a model capability that could be deprecated) is accepted explicitly; if that changes, the fallback path (yt-dlp + transcript) is well-defined and can be added without architectural changes.
+**Why we didn't:** Native URL summarization can return plausible but weakly-grounded outputs. Transcript grounding gives verifiable input text, deterministic fail behavior when transcripts are unavailable, and stronger content fidelity.
 
 ---
 

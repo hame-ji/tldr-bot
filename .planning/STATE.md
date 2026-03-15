@@ -9,7 +9,7 @@
 
 **Core Value:** A daily digest of everything you saved, summarized and delivered automatically, so nothing you save goes unread.
 
-**One-liner:** Serverless Telegram bot + GitHub Actions + Gemini 2.5 Flash — send URLs, receive a morning digest, no server required.
+**One-liner:** Serverless Telegram bot + GitHub Actions + OpenRouter free models — send URLs, receive a morning digest, no server required.
 
 **Working directory:** `/Users/jonas/dev/hameji/tldr-bot`
 
@@ -48,7 +48,7 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 
 | Decision | Rationale |
 |----------|-----------|
-| 6 phases despite "coarse" granularity setting | Each phase tests an independently verifiable external integration (Telegram, trafilatura, Gemini, Git); merging would mask which layer fails during debugging |
+| 6 phases despite "coarse" granularity setting | Each phase tests an independently verifiable external integration (Telegram, trafilatura, OpenRouter, Git); merging would mask which layer fails during debugging |
 | Polling offset committed before URL processing | POLL-04 / Pitfall 2: if pipeline crashes mid-run, offset must be persisted so next run doesn't reprocess same URLs |
 | `google-genai` not `google-generativeai` | `google-generativeai` is inactive since Nov 2025; explicitly pin `google-genai` in requirements.txt |
 | `parse_mode="HTML"` for Telegram digest delivery | Avoid MarkdownV2 escaping fragility while preserving safe formatting with escaped dynamic text |
@@ -65,8 +65,8 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 
 ### Research Flags
 
-- **Phase 4 (Gemini):** Verify `contents=[youtube_url]` native processing before building YouTube path — MEDIUM confidence from research. Fallback: write YouTube URLs to `data/failed/` in v1.
-- **Phase 4 (rate limits):** Exact Gemini 2.5 Flash quota/RPM limits vary by account tier. Keep retry + backoff enabled and verify if running 10+ URL batches.
+- **Phase 4 (YouTube):** Use transcript-grounded summarization via `youtube-transcript-api`; fail closed when transcript is unavailable.
+- **Phase 4 (rate limits):** Free OpenRouter models can change/limit dynamically. Keep model discovery cache + retry/backoff enabled and verify fallback ordering in CI.
 - **Phase 5 (parse_mode):** Use `parse_mode="HTML"` with escaped dynamic text to avoid MarkdownV2 escaping complexity.
 
 ### Architecture Notes
@@ -82,13 +82,13 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 ## Todos
 
 - [x] Create Telegram bot via BotFather and save token → Phase 1
-- [x] Create Gemini API key → Phase 1
+- [x] Create OpenRouter API key → Phase 1
 - [x] Verify `getUpdates` returns messages (no active webhook) → Phase 1
 - [x] Implement Telegram polling, chat filtering, and URL extraction in code + tests -> Phase 2
 - [x] Implement content fetching with timeout guards and failure records -> Phase 3
-- [x] Implement Gemini summarizer with prompt file control, retries, and source-file outputs -> Phase 4
+- [x] Implement OpenRouter summarizer with prompt file control, retries, and source-file outputs -> Phase 4
 - [x] Implement digest generation, failed-URL section, and Telegram delivery chunking -> Phase 5
-- [ ] Run live verification for Gemini YouTube URL processing on real input
+- [ ] Run live verification for transcript-grounded YouTube processing on real input
 
 ---
 

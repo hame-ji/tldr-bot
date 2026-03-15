@@ -2,10 +2,10 @@
 phase: 04-gemini-summarization
 plan: 02
 subsystem: summarization
-tags: [sources, retries, failure-handling, tests]
+tags: [sources, retries, failure-handling, tests, openrouter]
 requires:
   - phase: 04-01
-    provides: Gemini wrapper + prompt loading
+    provides: OpenRouter wrapper + prompt loading
 provides:
   - Summary persistence under data/sources
   - Failure fallback to data/failed
@@ -19,11 +19,11 @@ completed: 2026-03-15
 
 # Phase 4 Plan 02 Summary
 
-Integrated summarization into the pipeline and added test coverage.
+Integrated transcript-grounded OpenRouter summarization into the pipeline and expanded coverage.
 
 - Added source output writer path under `data/sources/<date>/`.
-- Added failure fallback records for summarization exceptions.
-- Added summarizer unit tests with mocked Gemini wrapper.
+- Added failure fallback records for transcript-unavailable and provider exceptions.
+- Added summarizer unit tests for OpenRouter env wiring, transcript extraction, and model ordering.
 
 Verification:
 - `python -m compileall src`

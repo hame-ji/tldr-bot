@@ -2,10 +2,12 @@
 phase: 04-gemini-summarization
 plan: 01
 subsystem: summarization
-tags: [gemini, prompts]
+tags: [openrouter, prompts, model-discovery, transcript]
 requires: []
 provides:
-  - Gemini wrapper for article and YouTube summarization
+  - OpenRouter wrapper for article and YouTube summarization
+  - Free-model discovery with cached selection
+  - Transcript-grounded YouTube input path
   - Prompt-file based summary behavior
 requirements-completed: [SUM-01, SUM-02, SUM-03]
 key-files:
@@ -16,9 +18,11 @@ completed: 2026-03-15
 
 # Phase 4 Plan 01 Summary
 
-Implemented Gemini summarization wrapper and prompt file control.
+Reworked summarization to OpenRouter with transcript-grounded YouTube handling.
 
-- Added `GeminiSummarizer` wrapper with article and YouTube methods.
+- Added `OpenRouterSummarizer` wrapper with article and YouTube methods.
+- Added free-model discovery and ranking with cache file support.
+- Added YouTube transcript fetch helper via `youtube-transcript-api` with strict failure behavior.
 - Added prompt loading from `prompts/summarize.txt`.
 - Added basic retry path for 429 and per-request spacing logic.
 

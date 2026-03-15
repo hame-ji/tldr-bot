@@ -24,6 +24,12 @@ jobs:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_MODEL: "gemini-2.5-flash"
+      GEMINI_FALLBACK_MODELS: "gemini-2.5-flash-lite"
+      GEMINI_MIN_SPACING_SECONDS: "2"
+      GEMINI_MAX_RETRIES: "8"
+      GEMINI_INITIAL_BACKOFF_SECONDS: "10"
+      GEMINI_MAX_BACKOFF_SECONDS: "180"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

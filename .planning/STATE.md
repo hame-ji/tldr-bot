@@ -9,7 +9,7 @@
 
 **Core Value:** A daily digest of everything you saved, summarized and delivered automatically, so nothing you save goes unread.
 
-**One-liner:** Serverless Telegram bot + GitHub Actions + Gemini 2.0 Flash — send URLs, receive a morning digest, no server required.
+**One-liner:** Serverless Telegram bot + GitHub Actions + Gemini 2.5 Flash — send URLs, receive a morning digest, no server required.
 
 **Working directory:** `/Users/jonas/dev/hameji/tldr-bot`
 
@@ -66,7 +66,7 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 ### Research Flags
 
 - **Phase 4 (Gemini):** Verify `contents=[youtube_url]` native processing before building YouTube path — MEDIUM confidence from research. Fallback: write YouTube URLs to `data/failed/` in v1.
-- **Phase 4 (rate limits):** Exact Gemini 2.0 Flash free-tier RPM limits not verified. `sleep(1)` + retry is safe regardless; verify if running 10+ URL batches.
+- **Phase 4 (rate limits):** Exact Gemini 2.5 Flash quota/RPM limits vary by account tier. Keep retry + backoff enabled and verify if running 10+ URL batches.
 - **Phase 5 (parse_mode):** Choose between `parse_mode="Markdown"` (v1) and HTML mode to avoid MarkdownV2 escaping complexity.
 
 ### Architecture Notes

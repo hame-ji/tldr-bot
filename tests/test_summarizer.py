@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 from unittest.mock import patch
 
-from src.summarizer import _source_output_path, summarize_item, summarize_items
+from src.summarizer import _fetch_youtube_title, _source_output_path, summarize_item, summarize_items
 
 
 class _FakeSummarizer:
@@ -121,6 +121,23 @@ class SummarizerTests(unittest.TestCase):
                 initial_backoff_seconds=5.0,
                 max_backoff_seconds=120.0,
             )
+
+    @patch("src.summarizer.requests.get")
+    def test_fetch_youtube_title_from_oembed(self, mock_get) -> None:
+        mock_get.return_value.json.return_value = {"title": "Open source is dying"}
+        mock_get.return_value.raise_for_status.return_value = None
+
+        title = _fetch_youtube_title("https://youtu.be/l8pQeVVaqpY")
+
+        self.assertEqual(title, "Open source is dying")
+
+    @patch("src.summarizer.requests.get")
+    def test_fetch_youtube_title_returns_none_when_oembed_fails(self, mock_get) -> None:
+        mock_get.side_effect = RuntimeError("network error")
+
+        title = _fetch_youtube_title("https://youtu.be/l8pQeVVaqpY")
+
+        self.assertIsNone(title)
 
 
 if __name__ == "__main__":

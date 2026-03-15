@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol
 
+import requests
 from slugify import slugify
 
 try:
@@ -164,7 +165,43 @@ class GeminiSummarizer(_RetryingSummarizerBase):
         return self._generate_with_retry(["URL: " + url, content], error_prefix="Gemini summarization failed")
 
     def summarize_youtube(self, url: str) -> str:
-        return self._generate_with_retry(["YouTube URL: " + url], error_prefix="Gemini summarization failed")
+        title = _fetch_youtube_title(url)
+        contents = [
+            "YouTube URL: " + url,
+            "Important: summarize this exact video URL only. If you cannot access this specific video, return UNAVAILABLE.",
+        ]
+        if title:
+            contents.append("Expected YouTube title: " + title)
+
+        summary = self._generate_with_retry(contents, error_prefix="Gemini summarization failed")
+        if summary.strip().upper().startswith("UNAVAILABLE"):
+            raise RuntimeError("Gemini could not access the provided YouTube URL")
+        return summary
+
+
+def _fetch_youtube_title(url: str) -> Optional[str]:
+    oembed_url = "https://www.youtube.com/oembed"
+    try:
+        response = requests.get(
+            oembed_url,
+            params={"url": url, "format": "json"},
+            timeout=(10, 30),
+        )
+        response.raise_for_status()
+    except Exception:  # noqa: BLE001
+        return None
+
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+
+    title = payload.get("title")
+    if not isinstance(title, str):
+        return None
+
+    title = title.strip()
+    return title or None
 
 
 def _source_output_path(url: str, run_date: date, base_dir: str = "data/sources") -> Path:

@@ -19,6 +19,7 @@ def _render_digest(
 
     successful = [item for item in items if item.get("status") == "ok"]
     failed = [item for item in items if item.get("status") == "failed"]
+    ignored = [item for item in items if item.get("status") == "ignored"]
 
     summary_blocks: list[str] = []
     for index, item in enumerate(successful, start=1):
@@ -57,6 +58,7 @@ def _render_digest(
         prompt.replace("{{date}}", run_date.isoformat())
         .replace("{{summary_count}}", str(len(successful)))
         .replace("{{failure_count}}", str(len(failed)))
+        .replace("{{ignored_count}}", str(len(ignored)))
         .replace("{{summaries}}", summaries_text)
         .replace("{{failed_urls_section}}", failed_section)
     ).strip()

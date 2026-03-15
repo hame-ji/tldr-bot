@@ -1,5 +1,8 @@
 # Pitfalls Research
 
+> Historical note (2026-03-15): This research includes Gemini-era pitfalls.
+> Current runtime scope is OpenRouter article-only summarization.
+
 **Domain:** Serverless Telegram bot + GitHub Actions + Gemini AI pipeline
 **Researched:** 2026-03-15
 **Confidence:** HIGH (based on official Telegram Bot API docs, GitHub Actions docs, google-genai SDK source, and domain-specific patterns)

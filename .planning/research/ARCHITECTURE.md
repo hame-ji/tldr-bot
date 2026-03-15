@@ -1,5 +1,8 @@
 # Architecture Research
 
+> Historical note (2026-03-15): This architecture research predates the article-only scope decision.
+> Current implementation ignores non-article URLs in v1.
+
 **Domain:** Serverless Telegram bot + AI summarisation pipeline (GitHub Actions runtime)
 **Researched:** 2026-03-15
 **Confidence:** HIGH — all major claims verified against official GitHub Actions docs and Telegram Bot API 9.5 (current)

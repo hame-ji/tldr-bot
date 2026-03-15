@@ -1,5 +1,8 @@
 # Stack Research
 
+> Historical note (2026-03-15): This file contains pre-pivot stack research.
+> Current runtime stack is OpenRouter + article-only summarization (YouTube ignored in v1).
+
 **Domain:** Serverless Telegram bot + AI summarization pipeline (Python + GitHub Actions + Gemini)
 **Researched:** 2026-03-15
 **Confidence:** HIGH — all recommendations verified against current PyPI releases

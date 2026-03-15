@@ -1,5 +1,8 @@
 # Project Research Summary
 
+> Historical note (2026-03-15): This document reflects an earlier Gemini/YouTube-capable design exploration.
+> Current implementation is OpenRouter article-only summarization; non-article URLs are silently ignored.
+
 **Project:** tldr-bot — Personal Telegram URL Digest Bot
 **Domain:** Serverless Telegram bot + AI summarization pipeline (Python + GitHub Actions + Gemini)
 **Researched:** 2026-03-15

@@ -1,6 +1,6 @@
 # Daily Research Digest - {{date}}
 
-Processed: {{summary_count}} successful, {{failure_count}} failed
+Processed: {{summary_count}} successful, {{failure_count}} failed, {{ignored_count}} ignored
 
 {{summaries}}
 

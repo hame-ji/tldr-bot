@@ -1,5 +1,8 @@
 # Feature Research
 
+> Historical note (2026-03-15): Parts of this feature analysis assume Gemini-native YouTube support.
+> Current implemented scope is article-only digest generation.
+
 **Domain:** Personal read-later / URL digest bot (Telegram + AI summarization + serverless)
 **Researched:** 2026-03-15
 **Confidence:** HIGH — grounded in Telegram Bot API docs, architecture.md, competitor analysis (Readwise Reader, Instapaper), and trafilatura/extraction library evaluation

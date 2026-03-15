@@ -66,7 +66,7 @@ User -> Telegram Bot
 | Telegram Bot | Ingestion interface + delivery channel | Ubiquitous, zero-friction, API-first |
 | GitHub Actions | Execution runtime + scheduler | Free, ephemeral, no ops burden |
 | GitHub Repository | Storage + version history | Durable, browsable, diffable |
-| Gemini 2.0 Flash | Summarization + YouTube processing | 1M context window; free tier; native YouTube URL support |
+| Gemini 2.5 Flash | Summarization + YouTube processing | Current default model with native YouTube URL support and fallback model failover |
 | `state.json` | Telegram polling cursor | Single-field, committed, auditable |
 
 ---
@@ -127,7 +127,7 @@ The commit strategy is intentionally simple: if a commit already exists for that
 
 ### 6. Gemini native YouTube processing
 
-**Decision:** YouTube URLs are passed directly to Gemini 2.0 Flash, which processes them natively. No transcript extraction.
+**Decision:** YouTube URLs are passed directly to Gemini 2.5 Flash, which processes them natively. No transcript extraction.
 
 **Alternative considered:** `yt-dlp` + Whisper transcription + summarization; YouTube Data API for metadata.
 
@@ -154,7 +154,7 @@ These are known limitations explicitly accepted for this version. They are not o
 | No cross-day URL deduplication | Same URL on two days is rare; two summaries is harmless; the fix (a URL index file) is additive when needed |
 | No on-demand digest from Telegram | Requires a persistent process or webhook; incompatible with the serverless constraint; manual dispatch from GitHub UI is sufficient |
 | Gemini free-tier rate limits | 1-10 URLs/day is well within limits; if usage grows, the API client is the only thing that changes |
-| No retry mechanism | Failure records provide the data; a `/retry` command is the natural future interface without pipeline changes |
+| Retry complexity and backoff tuning | Retries with exponential backoff are implemented for 429/resource exhaustion, but daily run volume is low so defaults remain intentionally conservative |
 | Partial results on mid-run API failure | Acceptable for a personal digest; the committed partial state is better than nothing |
 
 ---

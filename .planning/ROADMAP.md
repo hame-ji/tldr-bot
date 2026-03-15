@@ -73,7 +73,7 @@
 - [x] `03-02-PLAN.md` — Add failure-record behavior and content fetcher tests
 
 ### Phase 4: Gemini Summarization
-**Goal:** The pipeline can summarize article text and YouTube URLs via Gemini 2.0 Flash using prompt files, handle rate limits gracefully, and write each summary as a dated Markdown file — without SDK import errors or silent safety-block failures.
+**Goal:** The pipeline can summarize article text and YouTube URLs via Gemini 2.5 Flash using prompt files, handle rate limits gracefully, and write each summary as a dated Markdown file — without SDK import errors or silent safety-block failures.
 **Depends on:** Phase 3
 **Requirements:** SUM-01, SUM-02, SUM-03, SUM-04, SUM-05
 **Success Criteria** (what must be TRUE):

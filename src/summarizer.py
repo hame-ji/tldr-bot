@@ -14,14 +14,6 @@ except Exception:  # noqa: BLE001
     from src.content_fetcher import write_failure_record
 
 
-class Summarizer(Protocol):
-    def summarize_article(self, url: str, content: str) -> str:
-        ...
-
-    def summarize_youtube(self, url: str) -> str:
-        ...
-
-
 class _RetryingSummarizerBase:
     def __init__(
         self,
@@ -175,75 +167,6 @@ class GeminiSummarizer(_RetryingSummarizerBase):
         return self._generate_with_retry(["YouTube URL: " + url], error_prefix="Gemini summarization failed")
 
 
-class OpenRouterSummarizer(_RetryingSummarizerBase):
-    def __init__(
-        self,
-        api_key: str,
-        prompt_path: str = "prompts/summarize.txt",
-        model: str = "openrouter/auto",
-        min_spacing_seconds: float = 1.0,
-        max_retries: int = 6,
-        initial_backoff_seconds: float = 5.0,
-        max_backoff_seconds: float = 120.0,
-    ) -> None:
-        self.api_key = api_key
-        self.model = model
-        super().__init__(
-            prompt_path=prompt_path,
-            min_spacing_seconds=min_spacing_seconds,
-            max_retries=max_retries,
-            initial_backoff_seconds=initial_backoff_seconds,
-            max_backoff_seconds=max_backoff_seconds,
-        )
-
-    def _is_rate_limited(self, error: Exception) -> bool:
-        text = str(error).lower()
-        return (
-            super()._is_rate_limited(error)
-            or "quota" in text
-            or "credits" in text
-            or "rate limit" in text
-        )
-
-    def _generate_once(self, prompt: str, contents: list[str]) -> str:
-        import requests
-
-        body = {
-            "model": self.model,
-            "messages": [
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": "\n\n".join(contents)},
-            ],
-        }
-        headers = {
-            "Authorization": "Bearer " + self.api_key,
-            "Content-Type": "application/json",
-        }
-        response = requests.post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json=body,
-            timeout=60,
-        )
-        if response.status_code >= 400:
-            raise RuntimeError(f"{response.status_code} {response.text}")
-        payload = response.json()
-        choices = payload.get("choices") or []
-        if not choices:
-            raise RuntimeError("OpenRouter response contained no choices")
-        message = choices[0].get("message") or {}
-        content = message.get("content")
-        if not isinstance(content, str) or not content.strip():
-            raise RuntimeError("OpenRouter response contained no text")
-        return content
-
-    def summarize_article(self, url: str, content: str) -> str:
-        return self._generate_with_retry(["URL: " + url, content], error_prefix="OpenRouter summarization failed")
-
-    def summarize_youtube(self, url: str) -> str:
-        return self._generate_with_retry(["YouTube URL: " + url], error_prefix="OpenRouter summarization failed")
-
-
 def _source_output_path(url: str, run_date: date, base_dir: str = "data/sources") -> Path:
     from urllib.parse import urlparse
 
@@ -254,6 +177,14 @@ def _source_output_path(url: str, run_date: date, base_dir: str = "data/sources"
     out_dir = Path(base_dir) / day
     out_dir.mkdir(parents=True, exist_ok=True)
     return out_dir / (slug + ".md")
+
+
+class Summarizer(Protocol):
+    def summarize_article(self, url: str, content: str) -> str:
+        ...
+
+    def summarize_youtube(self, url: str) -> str:
+        ...
 
 
 def summarize_item(
@@ -298,76 +229,38 @@ def summarize_items(
     sources_base_dir: str = "data/sources",
     failed_base_dir: str = "data/failed",
 ) -> list[Dict[str, Any]]:
-    default_provider = os.environ.get("SUMMARIZER_PROVIDER", "gemini").strip().lower()
-    article_provider = os.environ.get("SUMMARIZER_PROVIDER_ARTICLE", default_provider).strip().lower()
-    youtube_provider = os.environ.get("SUMMARIZER_PROVIDER_YOUTUBE", default_provider).strip().lower()
-    valid_providers = {"gemini", "openrouter"}
-    if article_provider not in valid_providers:
-        raise RuntimeError("Unsupported SUMMARIZER_PROVIDER_ARTICLE: " + article_provider)
-    if youtube_provider not in valid_providers:
-        raise RuntimeError("Unsupported SUMMARIZER_PROVIDER_YOUTUBE: " + youtube_provider)
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("Missing GEMINI_API_KEY environment variable")
 
-    min_spacing_seconds = float(
-        os.environ.get("SUMMARIZER_MIN_SPACING_SECONDS")
-        or os.environ.get("GEMINI_MIN_SPACING_SECONDS", "1")
+    model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    fallback_models_raw = os.environ.get("GEMINI_FALLBACK_MODELS", "gemini-2.5-flash-lite")
+    fallback_models = [
+        model_name.strip()
+        for model_name in fallback_models_raw.split(",")
+        if model_name.strip()
+    ]
+    min_spacing_seconds = float(os.environ.get("GEMINI_MIN_SPACING_SECONDS", "1"))
+    max_retries = int(os.environ.get("GEMINI_MAX_RETRIES", "6"))
+    initial_backoff_seconds = float(os.environ.get("GEMINI_INITIAL_BACKOFF_SECONDS", "5"))
+    max_backoff_seconds = float(os.environ.get("GEMINI_MAX_BACKOFF_SECONDS", "120"))
+
+    summarizer = GeminiSummarizer(
+        api_key=api_key,
+        model=model,
+        fallback_models=fallback_models,
+        min_spacing_seconds=min_spacing_seconds,
+        max_retries=max_retries,
+        initial_backoff_seconds=initial_backoff_seconds,
+        max_backoff_seconds=max_backoff_seconds,
     )
-    max_retries = int(os.environ.get("SUMMARIZER_MAX_RETRIES") or os.environ.get("GEMINI_MAX_RETRIES", "6"))
-    initial_backoff_seconds = float(
-        os.environ.get("SUMMARIZER_INITIAL_BACKOFF_SECONDS")
-        or os.environ.get("GEMINI_INITIAL_BACKOFF_SECONDS", "5")
-    )
-    max_backoff_seconds = float(
-        os.environ.get("SUMMARIZER_MAX_BACKOFF_SECONDS")
-        or os.environ.get("GEMINI_MAX_BACKOFF_SECONDS", "120")
-    )
-
-    def build_summarizer(provider: str) -> Summarizer:
-        if provider == "openrouter":
-            api_key = os.environ.get("OPENROUTER_API_KEY")
-            if not api_key:
-                raise RuntimeError("Missing OPENROUTER_API_KEY environment variable")
-            model = os.environ.get("OPENROUTER_MODEL", "openrouter/auto")
-            return OpenRouterSummarizer(
-                api_key=api_key,
-                model=model,
-                min_spacing_seconds=min_spacing_seconds,
-                max_retries=max_retries,
-                initial_backoff_seconds=initial_backoff_seconds,
-                max_backoff_seconds=max_backoff_seconds,
-            )
-
-        api_key = os.environ.get("GEMINI_API_KEY")
-        if not api_key:
-            raise RuntimeError("Missing GEMINI_API_KEY environment variable")
-        model = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-        fallback_models_raw = os.environ.get("GEMINI_FALLBACK_MODELS", "gemini-2.5-flash-lite")
-        fallback_models = [
-            model_name.strip()
-            for model_name in fallback_models_raw.split(",")
-            if model_name.strip()
-        ]
-        return GeminiSummarizer(
-            api_key=api_key,
-            model=model,
-            fallback_models=fallback_models,
-            min_spacing_seconds=min_spacing_seconds,
-            max_retries=max_retries,
-            initial_backoff_seconds=initial_backoff_seconds,
-            max_backoff_seconds=max_backoff_seconds,
-        )
-
-    summarizers_by_provider: Dict[str, Summarizer] = {
-        provider: build_summarizer(provider)
-        for provider in {article_provider, youtube_provider}
-    }
 
     results = []
     for item in items:
-        provider = article_provider if item.get("kind") == "article" else youtube_provider
         results.append(
             summarize_item(
                 item=item,
-                summarizer=summarizers_by_provider[provider],
+                summarizer=summarizer,
                 run_date=run_date,
                 sources_base_dir=sources_base_dir,
                 failed_base_dir=failed_base_dir,

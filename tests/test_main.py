@@ -115,5 +115,36 @@ class MainPipelineOutcomeTests(unittest.TestCase):
         mock_send_digest_from_env.assert_not_called()
 
 
+class MainEntryPointTests(unittest.TestCase):
+    @patch("src.main.send_digest_from_env")
+    @patch("src.main.generate_digest")
+    @patch("src.main.summarize_items")
+    @patch("src.main.fetch_urls")
+    @patch("src.main.poll_urls_from_env")
+    def test_main_skips_digest_generation_when_no_urls(
+        self,
+        mock_poll_urls_from_env,
+        mock_fetch_urls,
+        mock_summarize_items,
+        mock_generate_digest,
+        mock_send_digest_from_env,
+    ) -> None:
+        from src.main import main
+
+        mock_poll_urls_from_env.return_value = {
+            "urls": [],
+            "update_count": 0,
+            "previous_offset": 12,
+            "next_offset": 12,
+        }
+
+        main()
+
+        mock_fetch_urls.assert_not_called()
+        mock_summarize_items.assert_not_called()
+        mock_generate_digest.assert_not_called()
+        mock_send_digest_from_env.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

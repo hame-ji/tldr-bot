@@ -103,48 +103,17 @@ class TelegramClientTests(unittest.TestCase):
         self.assertEqual(len(chunks), 2)
         self.assertTrue(all(len(chunk) <= 4096 for chunk in chunks))
 
-    @patch("src.telegram_client._telegram_api_get")
-    def test_send_digest_targets_configured_chat(self, mock_api_get) -> None:
-        mock_api_get.return_value = {"ok": True, "result": {"message_id": 1}}
+    @patch("src.telegram_client._telegram_api")
+    def test_send_digest_targets_configured_chat(self, mock_api) -> None:
+        mock_api.return_value = {"ok": True, "result": {"message_id": 1}}
 
         send_digest(bot_token="token", chat_id=123, digest_text="hello")
 
-        self.assertEqual(mock_api_get.call_count, 1)
-        _, method, params = mock_api_get.call_args[0]
+        self.assertEqual(mock_api.call_count, 1)
+        _, method, body = mock_api.call_args[0]
         self.assertEqual(method, "sendMessage")
-        self.assertEqual(params["chat_id"], 123)
-        self.assertEqual(params["parse_mode"], "HTML")
-
-
-class MainEmptyDayTests(unittest.TestCase):
-    @patch("src.main.send_digest_from_env")
-    @patch("src.main.generate_digest")
-    @patch("src.main.summarize_items")
-    @patch("src.main.fetch_urls")
-    @patch("src.main.poll_urls_from_env")
-    def test_main_skips_digest_generation_when_no_urls(
-        self,
-        mock_poll_urls_from_env,
-        mock_fetch_urls,
-        mock_summarize_items,
-        mock_generate_digest,
-        mock_send_digest_from_env,
-    ) -> None:
-        from src.main import main
-
-        mock_poll_urls_from_env.return_value = {
-            "urls": [],
-            "update_count": 0,
-            "previous_offset": 12,
-            "next_offset": 12,
-        }
-
-        main()
-
-        mock_fetch_urls.assert_not_called()
-        mock_summarize_items.assert_not_called()
-        mock_generate_digest.assert_not_called()
-        mock_send_digest_from_env.assert_not_called()
+        self.assertEqual(body["chat_id"], 123)
+        self.assertEqual(body["parse_mode"], "HTML")
 
 
 if __name__ == "__main__":

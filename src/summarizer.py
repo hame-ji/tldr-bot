@@ -41,7 +41,7 @@ class _RetryingSummarizerBase:
 
     def _is_rate_limited(self, error: Exception) -> bool:
         text = str(error).lower()
-        return "429" in text or "rate" in text and "limit" in text
+        return ("429" in text) or ("rate" in text and "limit" in text)
 
     def _extract_retry_after(self, error: Exception) -> Optional[float]:
         text = str(error)

@@ -88,6 +88,56 @@ class MainPipelineOutcomeTests(unittest.TestCase):
     @patch("src.main.summarize_items")
     @patch("src.main.fetch_urls")
     @patch("src.main.poll_urls_from_env")
+    def test_run_pipeline_counts_failed_article_items(
+        self,
+        mock_poll_urls_from_env,
+        mock_fetch_urls,
+        mock_summarize_items,
+        mock_generate_digest,
+        mock_send_digest_from_env,
+    ) -> None:
+        mock_poll_urls_from_env.return_value = {
+            "urls": ["https://x.com/user/status/123"],
+            "update_count": 1,
+            "previous_offset": 10,
+            "next_offset": 11,
+        }
+        mock_fetch_urls.return_value = [
+            {
+                "status": "failed",
+                "kind": "article",
+                "url": "https://x.com/user/status/123",
+                "error": "x_low_signal_content",
+                "failure_path": "data/failed/2026-03-15/x.md",
+            }
+        ]
+        mock_summarize_items.return_value = [
+            {
+                "status": "failed",
+                "kind": "article",
+                "url": "https://x.com/user/status/123",
+                "error": "x_low_signal_content",
+                "failure_path": "data/failed/2026-03-15/x.md",
+            }
+        ]
+        mock_generate_digest.return_value = {
+            "digest_path": "data/digests/2026-03-15.md",
+            "digest_text": "digest body",
+        }
+        mock_send_digest_from_env.return_value = [{"ok": True}]
+
+        outcome = run_pipeline(now=datetime(2026, 3, 15, tzinfo=timezone.utc))
+
+        self.assertEqual(outcome["processed_urls"], 1)
+        self.assertEqual(outcome["summary_ok_count"], 0)
+        self.assertEqual(outcome["summary_failed_count"], 1)
+        self.assertEqual(outcome["digest_created"], True)
+
+    @patch("src.main.send_digest_from_env")
+    @patch("src.main.generate_digest")
+    @patch("src.main.summarize_items")
+    @patch("src.main.fetch_urls")
+    @patch("src.main.poll_urls_from_env")
     def test_run_pipeline_skips_when_only_ignored_urls(
         self,
         mock_poll_urls_from_env,

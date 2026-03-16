@@ -7,6 +7,11 @@ import requests
 from slugify import slugify
 
 try:
+    from x_content_fetcher import X_HOSTS, XContentError, fetch_x_text
+except ImportError:
+    from src.x_content_fetcher import X_HOSTS, XContentError, fetch_x_text
+
+try:
     import trafilatura
 except ImportError:
     class _TrafilaturaFallback:
@@ -39,10 +44,13 @@ YOUTUBE_HOSTS = {
 }
 
 
+
 def classify_url(url: str) -> str:
     host = (urlparse(url).hostname or "").lower()
     if host in YOUTUBE_HOSTS:
         return "youtube"
+    if host in X_HOSTS:
+        return "x_post"
     return "article"
 
 
@@ -94,13 +102,11 @@ def write_failure_record(
     return out_path
 
 
-def fetch_url(url: str, failed_base_dir: str = "data/failed") -> Dict[str, Any]:
-    kind = classify_url(url)
-    if kind == "youtube":
-        return {"status": "ignored", "kind": "youtube", "url": url}
-
+def _fetch_and_record(
+    url: str, fetcher: Any, failed_base_dir: str
+) -> Dict[str, Any]:
     try:
-        content = fetch_article_text(url)
+        content = fetcher(url)
     except Exception as exc:  # noqa: BLE001
         failure_path = write_failure_record(url=url, error=str(exc), base_dir=failed_base_dir)
         return {
@@ -110,8 +116,18 @@ def fetch_url(url: str, failed_base_dir: str = "data/failed") -> Dict[str, Any]:
             "error": str(exc),
             "failure_path": str(failure_path),
         }
-
     return {"status": "ok", "kind": "article", "url": url, "content": content}
+
+
+def fetch_url(url: str, failed_base_dir: str = "data/failed") -> Dict[str, Any]:
+    kind = classify_url(url)
+    if kind == "youtube":
+        return {"status": "ignored", "kind": "youtube", "url": url}
+
+    if kind == "x_post":
+        return _fetch_and_record(url, fetch_x_text, failed_base_dir)
+
+    return _fetch_and_record(url, fetch_article_text, failed_base_dir)
 
 
 def fetch_urls(urls: Iterable[str], failed_base_dir: str = "data/failed") -> List[Dict[str, Any]]:

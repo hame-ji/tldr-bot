@@ -3,14 +3,18 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from src.summarizer import _order_models, _source_output_path, summarize_item, summarize_items
+from src.youtube_summarizer import YOUTUBE_AUTH_EXPIRED, YOUTUBE_SOURCE_FAILED, YouTubeSummaryError
 
 
 class _FakeSummarizer:
     def summarize_article(self, url: str, content: str) -> str:
         return "article summary for " + url
+
+    def summarize_youtube(self, url: str) -> str:
+        return "youtube summary for " + url
 
 
 class SummarizerTests(unittest.TestCase):
@@ -32,21 +36,27 @@ class SummarizerTests(unittest.TestCase):
             self.assertEqual(result["status"], "ok")
             self.assertTrue(Path(result["summary_path"]).exists())
 
-    def test_summarize_item_ignores_non_article_ok_items(self) -> None:
+    def test_summarize_item_writes_source_file_for_youtube(self) -> None:
         fake = _FakeSummarizer()
 
-        result = summarize_item(
-            item={"status": "ok", "kind": "youtube", "url": "https://youtu.be/abc"},
-            summarizer=fake,
-            run_date=date(2026, 3, 15),
-        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = summarize_item(
+                item={"status": "ok", "kind": "youtube", "url": "https://youtu.be/abc"},
+                summarizer=fake,
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+            )
 
-        self.assertEqual(result["status"], "ignored")
-        self.assertEqual(result["kind"], "youtube")
+            self.assertEqual(result["status"], "ok")
+            self.assertEqual(result["kind"], "youtube")
+            self.assertTrue(Path(result["summary_path"]).exists())
 
     def test_summarize_item_writes_failure_record_on_exception(self) -> None:
         class _Broken:
             def summarize_article(self, url: str, content: str) -> str:
+                raise RuntimeError("provider error")
+
+            def summarize_youtube(self, url: str) -> str:
                 raise RuntimeError("provider error")
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -59,11 +69,13 @@ class SummarizerTests(unittest.TestCase):
             self.assertEqual(result["status"], "failed")
             self.assertTrue(Path(result["failure_path"]).exists())
 
-    def test_summarize_items_does_not_require_key_when_no_articles(self) -> None:
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    def test_summarize_items_does_not_require_key_when_no_articles(self, mock_summarize_youtube) -> None:
+        mock_summarize_youtube.return_value = "youtube summary"
         old_key = os.environ.pop("OPENROUTER_API_KEY", None)
         try:
             results = summarize_items(
-                items=[{"status": "ignored", "kind": "youtube", "url": "https://youtu.be/abc"}],
+                items=[{"status": "ok", "kind": "youtube", "url": "https://youtu.be/abc"}],
                 run_date=date(2026, 3, 15),
             )
         finally:
@@ -71,7 +83,7 @@ class SummarizerTests(unittest.TestCase):
                 os.environ["OPENROUTER_API_KEY"] = old_key
 
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["status"], "ignored")
+        self.assertEqual(results[0]["status"], "ok")
 
     @patch("src.summarizer.OpenRouterSummarizer")
     def test_summarize_items_uses_openrouter_env(self, mock_cls) -> None:
@@ -144,6 +156,78 @@ class SummarizerTests(unittest.TestCase):
         self.assertEqual(ordered[0], "vendor/basic-model")
         self.assertIn("vendor/pro-model:free", ordered)
         self.assertNotIn("vendor/paid-model", ordered)
+
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    @patch("src.summarizer.OpenRouterSummarizer")
+    def test_summarize_items_routes_mixed_batch_by_kind(self, mock_openrouter_cls, mock_summarize_youtube) -> None:
+        class _ArticleOnly:
+            def summarize_article(self, url: str, content: str) -> str:
+                return "article via openrouter"
+
+        mock_openrouter_cls.return_value = _ArticleOnly()
+        mock_summarize_youtube.return_value = "youtube via notebooklm"
+
+        previous_key = os.environ.get("OPENROUTER_API_KEY")
+        os.environ["OPENROUTER_API_KEY"] = "key"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            try:
+                results = summarize_items(
+                    items=[
+                        {"status": "ok", "kind": "article", "url": "https://example.com/a", "content": "body"},
+                        {"status": "ok", "kind": "youtube", "url": "https://youtu.be/abc"},
+                    ],
+                    run_date=date(2026, 3, 15),
+                    sources_base_dir=tmpdir,
+                    failed_base_dir=tmpdir,
+                )
+            finally:
+                if previous_key is None:
+                    os.environ.pop("OPENROUTER_API_KEY", None)
+                else:
+                    os.environ["OPENROUTER_API_KEY"] = previous_key
+
+            self.assertEqual(len(results), 2)
+            self.assertEqual(results[0]["status"], "ok")
+            self.assertEqual(results[0]["kind"], "article")
+            self.assertEqual(results[1]["status"], "ok")
+            self.assertEqual(results[1]["kind"], "youtube")
+            mock_openrouter_cls.assert_called_once()
+            mock_summarize_youtube.assert_called_once_with(url="https://youtu.be/abc", prompt=ANY)
+
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    def test_summarize_items_youtube_auth_failure_writes_failure(self, mock_summarize_youtube) -> None:
+        mock_summarize_youtube.side_effect = YouTubeSummaryError(YOUTUBE_AUTH_EXPIRED, "session expired")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            results = summarize_items(
+                items=[{"status": "ok", "kind": "youtube", "url": "https://youtu.be/auth"}],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+            )
+
+            self.assertEqual(results[0]["status"], "failed")
+            self.assertEqual(results[0]["kind"], "youtube")
+            self.assertIn(YOUTUBE_AUTH_EXPIRED, results[0]["error"])
+            self.assertTrue(Path(results[0]["failure_path"]).exists())
+
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    def test_summarize_items_youtube_source_failure_writes_failure(self, mock_summarize_youtube) -> None:
+        mock_summarize_youtube.side_effect = YouTubeSummaryError(YOUTUBE_SOURCE_FAILED, "processing failed")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            results = summarize_items(
+                items=[{"status": "ok", "kind": "youtube", "url": "https://youtu.be/source"}],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+            )
+
+            self.assertEqual(results[0]["status"], "failed")
+            self.assertEqual(results[0]["kind"], "youtube")
+            self.assertIn(YOUTUBE_SOURCE_FAILED, results[0]["error"])
+            self.assertTrue(Path(results[0]["failure_path"]).exists())
 
 
 if __name__ == "__main__":

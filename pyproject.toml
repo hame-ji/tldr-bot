@@ -8,6 +8,7 @@ dependencies = [
     "lxml_html_clean==0.4.4",
     "requests==2.32.5",
     "python-slugify==8.0.4",
+    "notebooklm-py==0.3.4",
 ]
 
 [tool.uv]

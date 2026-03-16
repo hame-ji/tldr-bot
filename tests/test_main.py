@@ -57,7 +57,7 @@ class MainPipelineOutcomeTests(unittest.TestCase):
         }
         mock_fetch_urls.return_value = [
             {"status": "ok", "kind": "article", "url": "https://one.example", "content": "Body"},
-            {"status": "ignored", "kind": "youtube", "url": "https://two.example"},
+            {"status": "ok", "kind": "youtube", "url": "https://two.example"},
         ]
         mock_summarize_items.return_value = [
             {
@@ -66,7 +66,12 @@ class MainPipelineOutcomeTests(unittest.TestCase):
                 "url": "https://one.example",
                 "summary_path": "data/sources/2026-03-15/one.md",
             },
-            {"status": "ignored", "kind": "youtube", "url": "https://two.example"},
+            {
+                "status": "ok",
+                "kind": "youtube",
+                "url": "https://two.example",
+                "summary_path": "data/sources/2026-03-15/two.md",
+            },
         ]
         mock_generate_digest.return_value = {
             "digest_path": "data/digests/2026-03-15.md",
@@ -76,12 +81,112 @@ class MainPipelineOutcomeTests(unittest.TestCase):
 
         outcome = run_pipeline(now=datetime(2026, 3, 15, tzinfo=timezone.utc))
 
-        self.assertEqual(outcome["processed_urls"], 1)
-        self.assertEqual(outcome["summary_ok_count"], 1)
+        self.assertEqual(outcome["processed_urls"], 2)
+        self.assertEqual(outcome["summary_ok_count"], 2)
         self.assertEqual(outcome["summary_failed_count"], 0)
         self.assertEqual(outcome["digest_created"], True)
         self.assertEqual(outcome["digest_path"], "data/digests/2026-03-15.md")
         self.assertEqual(outcome["digest_sent_chunks"], 2)
+
+    @patch("src.main.send_digest_from_env")
+    @patch("src.main.generate_digest")
+    @patch("src.main.summarize_items")
+    @patch("src.main.fetch_urls")
+    @patch("src.main.poll_urls_from_env")
+    def test_run_pipeline_counts_failed_article_items(
+        self,
+        mock_poll_urls_from_env,
+        mock_fetch_urls,
+        mock_summarize_items,
+        mock_generate_digest,
+        mock_send_digest_from_env,
+    ) -> None:
+        mock_poll_urls_from_env.return_value = {
+            "urls": ["https://x.com/user/status/123"],
+            "update_count": 1,
+            "previous_offset": 10,
+            "next_offset": 11,
+        }
+        mock_fetch_urls.return_value = [
+            {
+                "status": "failed",
+                "kind": "article",
+                "url": "https://x.com/user/status/123",
+                "error": "x_low_signal_content",
+                "failure_path": "data/failed/2026-03-15/x.md",
+            }
+        ]
+        mock_summarize_items.return_value = [
+            {
+                "status": "failed",
+                "kind": "article",
+                "url": "https://x.com/user/status/123",
+                "error": "x_low_signal_content",
+                "failure_path": "data/failed/2026-03-15/x.md",
+            }
+        ]
+        mock_generate_digest.return_value = {
+            "digest_path": "data/digests/2026-03-15.md",
+            "digest_text": "digest body",
+        }
+        mock_send_digest_from_env.return_value = [{"ok": True}]
+
+        outcome = run_pipeline(now=datetime(2026, 3, 15, tzinfo=timezone.utc))
+
+        self.assertEqual(outcome["processed_urls"], 1)
+        self.assertEqual(outcome["summary_ok_count"], 0)
+        self.assertEqual(outcome["summary_failed_count"], 1)
+        self.assertEqual(outcome["digest_created"], True)
+
+    @patch("src.main.send_digest_from_env")
+    @patch("src.main.generate_digest")
+    @patch("src.main.summarize_items")
+    @patch("src.main.fetch_urls")
+    @patch("src.main.poll_urls_from_env")
+    def test_run_pipeline_counts_mixed_article_and_youtube_failures(
+        self,
+        mock_poll_urls_from_env,
+        mock_fetch_urls,
+        mock_summarize_items,
+        mock_generate_digest,
+        mock_send_digest_from_env,
+    ) -> None:
+        mock_poll_urls_from_env.return_value = {
+            "urls": ["https://one.example", "https://youtu.be/xyz"],
+            "update_count": 2,
+            "previous_offset": 10,
+            "next_offset": 12,
+        }
+        mock_fetch_urls.return_value = [
+            {"status": "ok", "kind": "article", "url": "https://one.example", "content": "Body"},
+            {"status": "ok", "kind": "youtube", "url": "https://youtu.be/xyz"},
+        ]
+        mock_summarize_items.return_value = [
+            {
+                "status": "ok",
+                "kind": "article",
+                "url": "https://one.example",
+                "summary_path": "data/sources/2026-03-15/one.md",
+            },
+            {
+                "status": "failed",
+                "kind": "youtube",
+                "url": "https://youtu.be/xyz",
+                "error": "youtube_auth_expired",
+                "failure_path": "data/failed/2026-03-15/xyz.md",
+            },
+        ]
+        mock_generate_digest.return_value = {
+            "digest_path": "data/digests/2026-03-15.md",
+            "digest_text": "digest body",
+        }
+        mock_send_digest_from_env.return_value = [{"ok": True}]
+
+        outcome = run_pipeline(now=datetime(2026, 3, 15, tzinfo=timezone.utc))
+
+        self.assertEqual(outcome["processed_urls"], 2)
+        self.assertEqual(outcome["summary_ok_count"], 1)
+        self.assertEqual(outcome["summary_failed_count"], 1)
 
     @patch("src.main.send_digest_from_env")
     @patch("src.main.generate_digest")
@@ -97,13 +202,13 @@ class MainPipelineOutcomeTests(unittest.TestCase):
         mock_send_digest_from_env,
     ) -> None:
         mock_poll_urls_from_env.return_value = {
-            "urls": ["https://youtu.be/abc"],
+            "urls": ["https://example.com/unsupported"],
             "update_count": 1,
             "previous_offset": 10,
             "next_offset": 11,
         }
         mock_fetch_urls.return_value = [
-            {"status": "ignored", "kind": "youtube", "url": "https://youtu.be/abc"},
+            {"status": "ignored", "kind": "unknown", "url": "https://example.com/unsupported"},
         ]
 
         outcome = run_pipeline(now=datetime(2026, 3, 15, tzinfo=timezone.utc))

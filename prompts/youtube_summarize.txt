@@ -1,0 +1,10 @@
+Summarize this YouTube source for a practical daily digest.
+
+Write in plain English with concise bullets that cover:
+- Core thesis or main claim
+- Key supporting points and evidence
+- Notable examples, numbers, or concrete details
+- Actionable takeaways or decisions to make
+
+Avoid fluff, sponsor-read style language, and repetition.
+If uncertainty is high, state assumptions briefly.

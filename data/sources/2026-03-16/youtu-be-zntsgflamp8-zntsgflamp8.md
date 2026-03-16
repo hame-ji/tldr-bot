@@ -1,11 +1,3 @@
-# Daily Research Digest - 2026-03-16
-
-Processed: 1 successful, 0 failed, 0 ignored
-
-## Item 1
-
-URL: https://youtu.be/ZNtsGFLAMP8?si=_XSeT6QVRxpIGWDU
-
 Here is a practical daily digest summarizing the comparison between Claude Code and Kilo CLI:
 
 **Core thesis or main claim**

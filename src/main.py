@@ -42,9 +42,10 @@ def run_pipeline(now: Optional[datetime] = None) -> dict[str, Any]:
         else:
             print(f"failed:{item['url']} -> {item['failure_path']}")
 
-    processable_items = [item for item in fetch_results if item.get("kind") == "article"]
+    summarizable_kinds = {"article", "youtube"}
+    processable_items = [item for item in fetch_results if item.get("kind") in summarizable_kinds]
     if len(processable_items) == 0:
-        print("no_article_urls_processed; skipping digest generation and delivery")
+        print("no_summarizable_urls_processed; skipping digest generation and delivery")
         return {
             "processed_urls": 0,
             "summary_ok_count": 0,
@@ -57,12 +58,12 @@ def run_pipeline(now: Optional[datetime] = None) -> dict[str, Any]:
     summarized = summarize_items(fetch_results, run_date=run_date)
     for item in summarized:
         if item["status"] == "ok":
-            print(f"summary:{item['url']} -> {item['summary_path']}")
+            print(f"summary:{item['kind']}:{item['url']} -> {item['summary_path']}")
         elif item["status"] == "ignored":
-            print(f"summary_ignored:{item['url']}")
+            print(f"summary_ignored:{item['kind']}:{item['url']}")
         else:
             error = item.get("error", "unknown")
-            print(f"summary_failed:{item['url']} -> {item['failure_path']} ({error})")
+            print(f"summary_failed:{item['kind']}:{item['url']} -> {item['failure_path']} ({error})")
 
     digest = generate_digest(summarized, run_date=run_date)
     print(f"digest:{digest['digest_path']}")
@@ -70,9 +71,11 @@ def run_pipeline(now: Optional[datetime] = None) -> dict[str, Any]:
     send_responses = send_digest_from_env(digest["digest_text"])
     print(f"digest_sent_chunks:{len(send_responses)}")
 
-    summary_ok_count = len([item for item in summarized if item.get("status") == "ok" and item.get("kind") == "article"])
+    summary_ok_count = len(
+        [item for item in summarized if item.get("status") == "ok" and item.get("kind") in summarizable_kinds]
+    )
     summary_failed_count = len(
-        [item for item in summarized if item.get("status") == "failed" and item.get("kind") == "article"]
+        [item for item in summarized if item.get("status") == "failed" and item.get("kind") in summarizable_kinds]
     )
     return {
         "processed_urls": summary_ok_count + summary_failed_count,

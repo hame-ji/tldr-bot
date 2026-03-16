@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src.content_fetcher import classify_url, fetch_url, write_failure_record
+from src.content_fetcher import classify_url, fetch_url, url_to_slug, write_failure_record
 
 
 class ContentFetcherTests(unittest.TestCase):
@@ -13,11 +13,20 @@ class ContentFetcherTests(unittest.TestCase):
         self.assertEqual(classify_url("https://youtu.be/abc"), "youtube")
         self.assertEqual(classify_url("https://example.com/article"), "article")
 
-    def test_fetch_url_youtube_is_ignored(self) -> None:
+    def test_fetch_url_youtube_is_marked_summarizable(self) -> None:
         result = fetch_url("https://youtu.be/abc")
 
-        self.assertEqual(result["status"], "ignored")
+        self.assertEqual(result["status"], "ok")
         self.assertEqual(result["kind"], "youtube")
+
+    def test_url_to_slug_includes_youtube_video_identifier(self) -> None:
+        slug_a = url_to_slug("https://www.youtube.com/watch?v=abc")
+        slug_b = url_to_slug("https://www.youtube.com/watch?v=def")
+        short = url_to_slug("https://youtu.be/xyz")
+
+        self.assertNotEqual(slug_a, slug_b)
+        self.assertIn("abc", slug_a)
+        self.assertIn("xyz", short)
 
     @patch("src.content_fetcher.trafilatura.extract")
     @patch("src.content_fetcher.requests.get")

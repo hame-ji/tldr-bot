@@ -14,6 +14,11 @@ try:
 except ImportError:
     from src.content_fetcher import load_prompt, url_to_slug, write_failure_record
 
+try:
+    from youtube_summarizer import summarize_youtube as summarize_youtube_with_notebooklm
+except ImportError:
+    from src.youtube_summarizer import summarize_youtube as summarize_youtube_with_notebooklm
+
 
 class _RetryingSummarizerBase:
     def __init__(
@@ -347,6 +352,9 @@ class Summarizer(Protocol):
     def summarize_article(self, url: str, content: str) -> str:
         ...
 
+    def summarize_youtube(self, url: str) -> str:
+        ...
+
 
 def summarize_item(
     item: Dict[str, Any],
@@ -358,17 +366,21 @@ def summarize_item(
     if item.get("status") != "ok":
         return item
 
-    if item.get("kind") != "article":
+    kind = item.get("kind")
+    if kind not in {"article", "youtube"}:
         return {"status": "ignored", "kind": item.get("kind", "unknown"), "url": item.get("url", "")}
 
     url = item["url"]
     try:
-        summary = summarizer.summarize_article(url=url, content=item["content"])
+        if kind == "article":
+            summary = summarizer.summarize_article(url=url, content=item["content"])
+        else:
+            summary = summarizer.summarize_youtube(url=url)
     except Exception as exc:  # noqa: BLE001
         failure = write_failure_record(url=url, error=str(exc), base_dir=failed_base_dir)
         return {
             "status": "failed",
-            "kind": item["kind"],
+            "kind": kind,
             "url": url,
             "error": str(exc),
             "failure_path": str(failure),
@@ -378,7 +390,7 @@ def summarize_item(
     output_path.write_text(summary + "\n", encoding="utf-8")
     return {
         "status": "ok",
-        "kind": item["kind"],
+        "kind": kind,
         "url": url,
         "summary_path": str(output_path),
     }
@@ -391,39 +403,46 @@ def summarize_items(
     failed_base_dir: str = "data/failed",
 ) -> list[Dict[str, Any]]:
     article_candidates = [item for item in items if item.get("status") == "ok" and item.get("kind") == "article"]
-    if not article_candidates:
+    has_youtube = any(item.get("status") == "ok" and item.get("kind") == "youtube" for item in items)
+
+    if not article_candidates and not has_youtube:
         return [summarize_item(item=item, summarizer=_NoopSummarizer(), run_date=run_date) for item in items]
 
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        raise RuntimeError("Missing OPENROUTER_API_KEY environment variable")
+    article_summarizer: Optional[OpenRouterSummarizer] = None
+    if article_candidates:
+        api_key = os.environ.get("OPENROUTER_API_KEY")
+        if not api_key:
+            raise RuntimeError("Missing OPENROUTER_API_KEY environment variable")
 
-    base_url = os.environ.get("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
-    preferred_models_raw = os.environ.get("OPENROUTER_PREFERRED_MODELS", "")
-    preferred_models = [
-        model_name.strip()
-        for model_name in preferred_models_raw.split(",")
-        if model_name.strip()
-    ]
+        base_url = os.environ.get("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
+        preferred_models_raw = os.environ.get("OPENROUTER_PREFERRED_MODELS", "")
+        preferred_models = [
+            model_name.strip()
+            for model_name in preferred_models_raw.split(",")
+            if model_name.strip()
+        ]
 
-    min_spacing_seconds = float(os.environ.get("OPENROUTER_MIN_SPACING_SECONDS", "1"))
-    max_retries = int(os.environ.get("OPENROUTER_MAX_RETRIES", "6"))
-    initial_backoff_seconds = float(os.environ.get("OPENROUTER_INITIAL_BACKOFF_SECONDS", "5"))
-    max_backoff_seconds = float(os.environ.get("OPENROUTER_MAX_BACKOFF_SECONDS", "120"))
-    models_cache_path = os.environ.get("OPENROUTER_MODELS_CACHE_PATH", "data/cache/openrouter_models.json")
-    models_cache_ttl_seconds = int(os.environ.get("OPENROUTER_MODELS_CACHE_TTL_SECONDS", "21600"))
+        min_spacing_seconds = float(os.environ.get("OPENROUTER_MIN_SPACING_SECONDS", "1"))
+        max_retries = int(os.environ.get("OPENROUTER_MAX_RETRIES", "6"))
+        initial_backoff_seconds = float(os.environ.get("OPENROUTER_INITIAL_BACKOFF_SECONDS", "5"))
+        max_backoff_seconds = float(os.environ.get("OPENROUTER_MAX_BACKOFF_SECONDS", "120"))
+        models_cache_path = os.environ.get("OPENROUTER_MODELS_CACHE_PATH", "data/cache/openrouter_models.json")
+        models_cache_ttl_seconds = int(os.environ.get("OPENROUTER_MODELS_CACHE_TTL_SECONDS", "21600"))
 
-    summarizer = OpenRouterSummarizer(
-        api_key=api_key,
-        base_url=base_url,
-        preferred_models=preferred_models,
-        min_spacing_seconds=min_spacing_seconds,
-        max_retries=max_retries,
-        initial_backoff_seconds=initial_backoff_seconds,
-        max_backoff_seconds=max_backoff_seconds,
-        models_cache_path=models_cache_path,
-        models_cache_ttl_seconds=models_cache_ttl_seconds,
-    )
+        article_summarizer = OpenRouterSummarizer(
+            api_key=api_key,
+            base_url=base_url,
+            preferred_models=preferred_models,
+            min_spacing_seconds=min_spacing_seconds,
+            max_retries=max_retries,
+            initial_backoff_seconds=initial_backoff_seconds,
+            max_backoff_seconds=max_backoff_seconds,
+            models_cache_path=models_cache_path,
+            models_cache_ttl_seconds=models_cache_ttl_seconds,
+        )
+
+    youtube_prompt_path = os.environ.get("NOTEBOOKLM_SUMMARIZE_PROMPT_PATH", "prompts/youtube_summarize.txt")
+    summarizer = _PipelineSummarizer(article_summarizer=article_summarizer, youtube_prompt_path=youtube_prompt_path)
 
     results = []
     for item in items:
@@ -442,3 +461,23 @@ def summarize_items(
 class _NoopSummarizer:
     def summarize_article(self, url: str, content: str) -> str:
         raise RuntimeError("No article summarization candidates")
+
+    def summarize_youtube(self, url: str) -> str:
+        raise RuntimeError("No youtube summarization candidates")
+
+
+class _PipelineSummarizer:
+    def __init__(self, article_summarizer: Optional[OpenRouterSummarizer], youtube_prompt_path: str) -> None:
+        self.article_summarizer = article_summarizer
+        self.youtube_prompt_path = youtube_prompt_path
+        self._youtube_prompt: Optional[str] = None
+
+    def summarize_article(self, url: str, content: str) -> str:
+        if self.article_summarizer is None:
+            raise RuntimeError("No article summarizer configured")
+        return self.article_summarizer.summarize_article(url=url, content=content)
+
+    def summarize_youtube(self, url: str) -> str:
+        if self._youtube_prompt is None:
+            self._youtube_prompt = load_prompt(self.youtube_prompt_path)
+        return summarize_youtube_with_notebooklm(url=url, prompt=self._youtube_prompt)

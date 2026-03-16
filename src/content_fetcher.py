@@ -1,7 +1,8 @@
 from datetime import datetime, timezone
+import hashlib
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import requests
 from slugify import slugify
@@ -17,9 +18,33 @@ except ImportError:
     trafilatura = _TrafilaturaFallback()
 
 
+YOUTUBE_HOSTS = {
+    "youtube.com",
+    "www.youtube.com",
+    "m.youtube.com",
+    "youtu.be",
+    "www.youtu.be",
+}
+
+
 def url_to_slug(url: str, fallback: str = "url") -> str:
     parsed = urlparse(url)
     slug_seed = (parsed.netloc + parsed.path).strip("/") or fallback
+
+    host = (parsed.hostname or "").lower()
+    if host in YOUTUBE_HOSTS:
+        query = parse_qs(parsed.query)
+        if host.endswith("youtu.be"):
+            video_id = parsed.path.strip("/")
+        else:
+            video_id = (query.get("v") or [""])[0]
+
+        if video_id:
+            slug_seed = f"{slug_seed}-{video_id}"
+        else:
+            digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:10]
+            slug_seed = f"{slug_seed}-{digest}"
+
     return slugify(slug_seed)[:80] or fallback
 
 
@@ -28,15 +53,6 @@ def load_prompt(path: str) -> str:
         return Path(path).read_text(encoding="utf-8").strip()
     except FileNotFoundError:
         raise RuntimeError("Missing prompt file: " + path) from None
-
-
-YOUTUBE_HOSTS = {
-    "youtube.com",
-    "www.youtube.com",
-    "m.youtube.com",
-    "youtu.be",
-    "www.youtu.be",
-}
 
 
 def classify_url(url: str) -> str:
@@ -97,7 +113,7 @@ def write_failure_record(
 def fetch_url(url: str, failed_base_dir: str = "data/failed") -> Dict[str, Any]:
     kind = classify_url(url)
     if kind == "youtube":
-        return {"status": "ignored", "kind": "youtube", "url": url}
+        return {"status": "ok", "kind": "youtube", "url": url}
 
     try:
         content = fetch_article_text(url)

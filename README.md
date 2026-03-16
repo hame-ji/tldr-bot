@@ -62,7 +62,8 @@ User -> Telegram Bot
 - `data/sources/YYYY-MM-DD/` successful summary artifacts
 - `data/failed/YYYY-MM-DD/` failure records with URL + error context
 - `data/digests/YYYY-MM-DD.md` generated daily digest
-- `prompts/summarize.txt` summarization behavior
+- `prompts/summarize.txt` article summarization behavior
+- `prompts/youtube_summarize.txt` YouTube summarization behavior
 - `prompts/digest.txt` digest rendering behavior
 - `state.json` Telegram polling cursor
 
@@ -90,6 +91,11 @@ Required environment variables:
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
 - `OPENROUTER_API_KEY`
+- `NOTEBOOKLM_STORAGE_STATE` (required to summarize YouTube URLs via NotebookLM)
+
+Optional environment variables:
+
+- `NOTEBOOKLM_SUMMARIZE_PROMPT_PATH` (defaults to `prompts/youtube_summarize.txt`)
 
 ## Documentation
 

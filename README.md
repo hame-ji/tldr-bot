@@ -77,13 +77,12 @@ User -> Telegram Bot
 
 ## Local verification
 
+Install `uv` first: https://docs.astral.sh/uv/getting-started/installation/
+
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m unittest discover -s tests -p "test_*.py"
-python src/main.py
+uv sync --frozen
+uv run python -m unittest discover -s tests -p "test_*.py"
+uv run python src/main.py
 ```
 
 Required environment variables:

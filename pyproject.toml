@@ -1,0 +1,14 @@
+[project]
+name = "tldr-bot"
+version = "0.1.0"
+description = "A personal Telegram URL digest pipeline"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "trafilatura==1.12.2",
+    "lxml_html_clean==0.4.4",
+    "requests==2.32.5",
+    "python-slugify==8.0.4",
+]
+
+[tool.uv]
+package = false

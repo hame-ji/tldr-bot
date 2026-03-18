@@ -20,6 +20,7 @@ concurrency:
 jobs:
   digest:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -36,22 +37,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      - name: Install uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
 
       - name: Install dependencies
-        run: |
-          "$HOME/.local/bin/uv" sync --frozen
-
-      - name: Run unit tests
-        run: $HOME/.local/bin/uv run python -m unittest discover -s tests -p "test_*.py"
+        run: uv sync --frozen
 
       - name: Validate required secrets
         run: |
@@ -73,7 +72,7 @@ jobs:
         id: pipeline
         run: |
           set -euo pipefail
-          $HOME/.local/bin/uv run python src/main.py | tee /tmp/pipeline.log
+          uv run python src/main.py | tee /tmp/pipeline.log
           python - <<'PY'
           import json
           import os
@@ -95,12 +94,14 @@ jobs:
           PY
 
       - name: Commit and push pipeline outputs
+        id: persist_outputs
         if: ${{ steps.pipeline.outputs.processed_urls != '0' }}
         run: |
           set -euo pipefail
 
           TODAY_UTC=$(date -u +%F)
           DAILY_SUBJECT="chore(digest): ${TODAY_UTC} daily digest"
+          OUTPUT_PATH="$GITHUB_OUTPUT"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -108,14 +109,35 @@ jobs:
           git add state.json data/
           if git diff --staged --quiet; then
             echo "No staged output changes; skipping commit/push"
+            echo "commit_status=no_changes" >> "$OUTPUT_PATH"
             exit 0
           fi
 
-          HEAD_SUBJECT=$(git log -1 --format=%s || true)
-          if [ "$HEAD_SUBJECT" = "$DAILY_SUBJECT" ]; then
-            git commit --amend -m "$DAILY_SUBJECT"
-            git push --force-with-lease
-          else
-            git commit -m "$DAILY_SUBJECT"
-            git push
-          fi
+          git commit -m "$DAILY_SUBJECT"
+          git push
+          echo "commit_status=pushed" >> "$OUTPUT_PATH"
+
+      - name: Upload pipeline log on failure
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-log
+          path: /tmp/pipeline.log
+          if-no-files-found: ignore
+
+      - name: Write job summary
+        if: ${{ always() }}
+        env:
+          PIPELINE_RESULT: ${{ steps.pipeline.outcome }}
+          PROCESSED_URLS: ${{ steps.pipeline.outputs.processed_urls || 'unknown' }}
+          DIGEST_CREATED: ${{ steps.pipeline.outputs.digest_created || 'unknown' }}
+          COMMIT_STATUS: ${{ steps.persist_outputs.outputs.commit_status || 'not_required' }}
+        run: |
+          {
+            echo "## Digest run"
+            echo
+            echo "- Pipeline step: ${PIPELINE_RESULT}"
+            echo "- Processed URLs: ${PROCESSED_URLS}"
+            echo "- Digest created: ${DIGEST_CREATED}"
+            echo "- Output persistence: ${COMMIT_STATUS}"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -101,7 +101,6 @@ jobs:
 
           TODAY_UTC=$(date -u +%F)
           DAILY_SUBJECT="chore(digest): ${TODAY_UTC} daily digest"
-          OUTPUT_PATH="$GITHUB_OUTPUT"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -109,13 +108,13 @@ jobs:
           git add state.json data/
           if git diff --staged --quiet; then
             echo "No staged output changes; skipping commit/push"
-            echo "commit_status=no_changes" >> "$OUTPUT_PATH"
+            echo "commit_status=no_changes" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           git commit -m "$DAILY_SUBJECT"
           git push
-          echo "commit_status=pushed" >> "$OUTPUT_PATH"
+          echo "commit_status=pushed" >> "$GITHUB_OUTPUT"
 
       - name: Upload pipeline log on failure
         if: ${{ failure() }}

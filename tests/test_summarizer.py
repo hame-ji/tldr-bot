@@ -1,12 +1,38 @@
+import contextlib
 import os
 import tempfile
+import threading
+import time
 import unittest
 from datetime import date
 from pathlib import Path
+from typing import Dict, Iterator, Optional
 from unittest.mock import ANY, patch
 
-from src.summarizer import _order_models, _source_output_path, summarize_item, summarize_items
+from src.summarizer import (
+    OpenRouterSummarizer,
+    _clamp_concurrency,
+    _order_models,
+    _source_output_path,
+    summarize_item,
+    summarize_items,
+)
 from src.youtube_summarizer import YOUTUBE_AUTH_EXPIRED, YOUTUBE_SOURCE_FAILED, YouTubeSummaryError
+
+
+@contextlib.contextmanager
+def _override_env(overrides: Dict[str, str]) -> Iterator[None]:
+    """Temporarily set environment variables, restoring originals on exit."""
+    saved: Dict[str, Optional[str]] = {name: os.environ.get(name) for name in overrides}
+    os.environ.update(overrides)
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 class _FakeSummarizer:
@@ -81,7 +107,7 @@ class SummarizerTests(unittest.TestCase):
         finally:
             if old_key is not None:
                 os.environ["OPENROUTER_API_KEY"] = old_key
-
+        # Note: this test intentionally *removes* the key, so _override_env isn't a fit.
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["status"], "ok")
 
@@ -90,45 +116,25 @@ class SummarizerTests(unittest.TestCase):
         fake = _FakeSummarizer()
         mock_cls.return_value = fake
 
-        old_env = {
-            name: os.environ.get(name)
-            for name in [
-                "OPENROUTER_API_KEY",
-                "OPENROUTER_API_BASE",
-                "OPENROUTER_PREFERRED_MODELS",
-                "OPENROUTER_MIN_SPACING_SECONDS",
-                "OPENROUTER_MAX_RETRIES",
-                "OPENROUTER_INITIAL_BACKOFF_SECONDS",
-                "OPENROUTER_MAX_BACKOFF_SECONDS",
-                "OPENROUTER_MODELS_CACHE_PATH",
-                "OPENROUTER_MODELS_CACHE_TTL_SECONDS",
-            ]
-        }
-
         with tempfile.TemporaryDirectory() as tmpdir:
-            os.environ["OPENROUTER_API_KEY"] = "openrouter-key"
-            os.environ["OPENROUTER_API_BASE"] = "https://openrouter.ai/api/v1"
-            os.environ["OPENROUTER_PREFERRED_MODELS"] = "model/a:free,model/b:free"
-            os.environ["OPENROUTER_MIN_SPACING_SECONDS"] = "2"
-            os.environ["OPENROUTER_MAX_RETRIES"] = "7"
-            os.environ["OPENROUTER_INITIAL_BACKOFF_SECONDS"] = "6"
-            os.environ["OPENROUTER_MAX_BACKOFF_SECONDS"] = "90"
-            os.environ["OPENROUTER_MODELS_CACHE_PATH"] = str(Path(tmpdir) / "models.json")
-            os.environ["OPENROUTER_MODELS_CACHE_TTL_SECONDS"] = "123"
-
-            try:
+            env = {
+                "OPENROUTER_API_KEY": "openrouter-key",
+                "OPENROUTER_API_BASE": "https://openrouter.ai/api/v1",
+                "OPENROUTER_PREFERRED_MODELS": "model/a:free,model/b:free",
+                "OPENROUTER_MIN_SPACING_SECONDS": "2",
+                "OPENROUTER_MAX_RETRIES": "7",
+                "OPENROUTER_INITIAL_BACKOFF_SECONDS": "6",
+                "OPENROUTER_MAX_BACKOFF_SECONDS": "90",
+                "OPENROUTER_MODELS_CACHE_PATH": str(Path(tmpdir) / "models.json"),
+                "OPENROUTER_MODELS_CACHE_TTL_SECONDS": "123",
+            }
+            with _override_env(env):
                 results = summarize_items(
                     items=[{"status": "ok", "kind": "article", "url": "https://example.com", "content": "hello"}],
                     run_date=date(2026, 3, 15),
                     sources_base_dir=tmpdir,
                     failed_base_dir=tmpdir,
                 )
-            finally:
-                for name, value in old_env.items():
-                    if value is None:
-                        os.environ.pop(name, None)
-                    else:
-                        os.environ[name] = value
 
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0]["status"], "ok")
@@ -167,11 +173,8 @@ class SummarizerTests(unittest.TestCase):
         mock_openrouter_cls.return_value = _ArticleOnly()
         mock_summarize_youtube.return_value = "youtube via notebooklm"
 
-        previous_key = os.environ.get("OPENROUTER_API_KEY")
-        os.environ["OPENROUTER_API_KEY"] = "key"
-
         with tempfile.TemporaryDirectory() as tmpdir:
-            try:
+            with _override_env({"OPENROUTER_API_KEY": "key"}):
                 results = summarize_items(
                     items=[
                         {"status": "ok", "kind": "article", "url": "https://example.com/a", "content": "body"},
@@ -181,11 +184,6 @@ class SummarizerTests(unittest.TestCase):
                     sources_base_dir=tmpdir,
                     failed_base_dir=tmpdir,
                 )
-            finally:
-                if previous_key is None:
-                    os.environ.pop("OPENROUTER_API_KEY", None)
-                else:
-                    os.environ["OPENROUTER_API_KEY"] = previous_key
 
             self.assertEqual(len(results), 2)
             self.assertEqual(results[0]["status"], "ok")
@@ -228,6 +226,326 @@ class SummarizerTests(unittest.TestCase):
             self.assertEqual(results[0]["kind"], "youtube")
             self.assertIn(YOUTUBE_SOURCE_FAILED, results[0]["error"])
             self.assertTrue(Path(results[0]["failure_path"]).exists())
+
+
+class ClampConcurrencyTests(unittest.TestCase):
+    def test_default_when_env_unset(self) -> None:
+        self.assertEqual(_clamp_concurrency("1", default=1, max_allowed=3), 1)
+
+    def test_valid_value_within_range(self) -> None:
+        self.assertEqual(_clamp_concurrency("2", default=1, max_allowed=3), 2)
+
+    def test_clamps_above_max(self) -> None:
+        self.assertEqual(_clamp_concurrency("10", default=1, max_allowed=3), 3)
+
+    def test_clamps_below_min(self) -> None:
+        self.assertEqual(_clamp_concurrency("0", default=1, max_allowed=3), 1)
+        self.assertEqual(_clamp_concurrency("-5", default=1, max_allowed=3), 1)
+
+    def test_non_numeric_uses_default(self) -> None:
+        self.assertEqual(_clamp_concurrency("abc", default=2, max_allowed=3), 2)
+
+
+class ConcurrencySummarizeItemsTests(unittest.TestCase):
+    """Tests for dual-backend bounded concurrency in summarize_items."""
+
+    @patch("src.summarizer.OpenRouterSummarizer")
+    def test_default_sequential_single_article(self, mock_cls) -> None:
+        """With default concurrency (1,1), a single article should still work."""
+        fake = _FakeSummarizer()
+        mock_cls.return_value = fake
+
+        with tempfile.TemporaryDirectory() as tmpdir, _override_env({"OPENROUTER_API_KEY": "key"}):
+            results = summarize_items(
+                items=[{"status": "ok", "kind": "article", "url": "https://example.com/seq", "content": "body"}],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+            )
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["status"], "ok")
+        self.assertEqual(results[0]["kind"], "article")
+
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    @patch("src.summarizer.OpenRouterSummarizer")
+    def test_concurrent_articles_and_youtube_run_in_parallel(self, mock_cls, mock_yt) -> None:
+        """With concurrency > 1, articles and youtube should overlap."""
+        call_log: list[tuple[str, float]] = []
+        lock = threading.Lock()
+
+        class _SlowArticle:
+            def summarize_article(self, url: str, content: str) -> str:
+                start = time.monotonic()
+                time.sleep(0.05)
+                with lock:
+                    call_log.append(("article", start))
+                return "article summary"
+
+        mock_cls.return_value = _SlowArticle()
+
+        def slow_youtube(url: str, prompt: str) -> str:
+            start = time.monotonic()
+            time.sleep(0.05)
+            with lock:
+                call_log.append(("youtube", start))
+            return "youtube summary"
+
+        mock_yt.side_effect = slow_youtube
+
+        env_vars = {
+            "OPENROUTER_API_KEY": "key",
+            "OPENROUTER_MAX_CONCURRENCY": "2",
+            "NOTEBOOKLM_MAX_CONCURRENCY": "2",
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir, _override_env(env_vars):
+            results = summarize_items(
+                items=[
+                    {"status": "ok", "kind": "article", "url": "https://example.com/a1", "content": "body1"},
+                    {"status": "ok", "kind": "youtube", "url": "https://youtu.be/v1"},
+                    {"status": "ok", "kind": "article", "url": "https://example.com/a2", "content": "body2"},
+                    {"status": "ok", "kind": "youtube", "url": "https://youtu.be/v2"},
+                ],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+            )
+
+        self.assertEqual(len(results), 4)
+        self.assertTrue(all(r["status"] == "ok" for r in results))
+
+        # With concurrency=2 per pool and 50ms sleep, the 2 articles overlap and
+        # the 2 youtube items overlap. Cross-pool also overlaps. Total wall time
+        # should be well under 4*50ms = 200ms sequential.
+        article_starts = [t for kind, t in call_log if kind == "article"]
+        youtube_starts = [t for kind, t in call_log if kind == "youtube"]
+        self.assertEqual(len(article_starts), 2)
+        self.assertEqual(len(youtube_starts), 2)
+
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    @patch("src.summarizer.OpenRouterSummarizer")
+    def test_order_preservation_with_mixed_kinds(self, mock_cls, mock_yt) -> None:
+        """Results must be returned in original input order regardless of completion order."""
+        class _ArticleOnly:
+            def summarize_article(self, url: str, content: str) -> str:
+                return "article:" + url
+
+        mock_cls.return_value = _ArticleOnly()
+        mock_yt.return_value = "youtube summary"
+
+        env_vars = {
+            "OPENROUTER_API_KEY": "key",
+            "OPENROUTER_MAX_CONCURRENCY": "3",
+            "NOTEBOOKLM_MAX_CONCURRENCY": "3",
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir, _override_env(env_vars):
+            items = [
+                {"status": "ok", "kind": "youtube", "url": "https://youtu.be/first"},
+                {"status": "ok", "kind": "article", "url": "https://example.com/second", "content": "b"},
+                {"status": "ok", "kind": "youtube", "url": "https://youtu.be/third"},
+                {"status": "ok", "kind": "article", "url": "https://example.com/fourth", "content": "d"},
+                {"status": "failed", "kind": "article", "url": "https://example.com/fifth", "error": "e", "failure_path": "x"},
+            ]
+            results = summarize_items(
+                items=items,
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+            )
+
+        self.assertEqual(len(results), 5)
+        self.assertEqual(results[0]["kind"], "youtube")
+        self.assertEqual(results[0]["url"], "https://youtu.be/first")
+        self.assertEqual(results[1]["kind"], "article")
+        self.assertEqual(results[1]["url"], "https://example.com/second")
+        self.assertEqual(results[2]["kind"], "youtube")
+        self.assertEqual(results[2]["url"], "https://youtu.be/third")
+        self.assertEqual(results[3]["kind"], "article")
+        self.assertEqual(results[3]["url"], "https://example.com/fourth")
+        # The failed item passes through unchanged
+        self.assertEqual(results[4]["status"], "failed")
+
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    @patch("src.summarizer.OpenRouterSummarizer")
+    def test_failure_isolation_between_backends(self, mock_cls, mock_yt) -> None:
+        """A YouTube failure must not affect article results, and vice versa."""
+        class _WorkingArticle:
+            def summarize_article(self, url: str, content: str) -> str:
+                return "article ok"
+
+        mock_cls.return_value = _WorkingArticle()
+        mock_yt.side_effect = RuntimeError("notebooklm crashed")
+
+        with tempfile.TemporaryDirectory() as tmpdir, _override_env({"OPENROUTER_API_KEY": "key"}):
+            results = summarize_items(
+                items=[
+                    {"status": "ok", "kind": "article", "url": "https://example.com/good", "content": "body"},
+                    {"status": "ok", "kind": "youtube", "url": "https://youtu.be/bad"},
+                ],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+            )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["status"], "ok")
+        self.assertEqual(results[0]["kind"], "article")
+        self.assertEqual(results[1]["status"], "failed")
+        self.assertEqual(results[1]["kind"], "youtube")
+        self.assertIn("notebooklm crashed", results[1]["error"])
+
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    @patch("src.summarizer.OpenRouterSummarizer")
+    def test_failure_isolation_article_fails_youtube_succeeds(self, mock_cls, mock_yt) -> None:
+        """Article failure must not affect YouTube results."""
+        class _BrokenArticle:
+            def summarize_article(self, url: str, content: str) -> str:
+                raise RuntimeError("openrouter crashed")
+
+        mock_cls.return_value = _BrokenArticle()
+        mock_yt.return_value = "youtube ok"
+
+        with tempfile.TemporaryDirectory() as tmpdir, _override_env({"OPENROUTER_API_KEY": "key"}):
+            results = summarize_items(
+                items=[
+                    {"status": "ok", "kind": "youtube", "url": "https://youtu.be/good"},
+                    {"status": "ok", "kind": "article", "url": "https://example.com/bad", "content": "body"},
+                ],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+            )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(results[0]["status"], "ok")
+        self.assertEqual(results[0]["kind"], "youtube")
+        self.assertEqual(results[1]["status"], "failed")
+        self.assertEqual(results[1]["kind"], "article")
+
+
+class OpenRouterThreadSafetyTests(unittest.TestCase):
+    """Verify concurrency protections in OpenRouterSummarizer."""
+
+    def test_spacing_lock_preserves_min_gap_with_staggered_arrivals(self) -> None:
+        summarizer = OpenRouterSummarizer.__new__(OpenRouterSummarizer)
+        summarizer.min_spacing_seconds = 0.05
+        summarizer._next_request_at = time.monotonic() + summarizer.min_spacing_seconds
+        summarizer._spacing_lock = threading.Lock()
+        summarizer._models_lock = threading.Lock()
+
+        start_times: list[float] = []
+        lock = threading.Lock()
+
+        def worker(arrive_delay: float, work_delay: float) -> None:
+            time.sleep(arrive_delay)
+            summarizer._wait_for_min_spacing()
+            with lock:
+                start_times.append(time.monotonic())
+            time.sleep(work_delay)
+
+        threads = [
+            threading.Thread(target=worker, args=(0.00, 0.01)),
+            threading.Thread(target=worker, args=(0.001, 0.08)),
+            threading.Thread(target=worker, args=(0.002, 0.08)),
+            threading.Thread(target=worker, args=(0.07, 0.01)),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        self.assertEqual(len(start_times), 4)
+
+        ordered_starts = sorted(start_times)
+        intervals = [ordered_starts[idx + 1] - ordered_starts[idx] for idx in range(len(ordered_starts) - 1)]
+        min_interval = min(intervals)
+        self.assertGreaterEqual(
+            min_interval,
+            0.045,
+            f"Observed start interval {min_interval:.4f}s was below configured spacing",
+        )
+
+    def test_models_initialization_runs_once_under_concurrency(self) -> None:
+        summarizer = OpenRouterSummarizer.__new__(OpenRouterSummarizer)
+        summarizer._ordered_models = None
+        summarizer._models_lock = threading.Lock()
+        call_count = 0
+        call_lock = threading.Lock()
+
+        def discover() -> list[str]:
+            nonlocal call_count
+            with call_lock:
+                call_count += 1
+            time.sleep(0.02)
+            return ["model/a:free"]
+
+        summarizer._discover_free_models = discover  # type: ignore[method-assign]
+
+        results: list[list[str]] = []
+        results_lock = threading.Lock()
+
+        def worker() -> None:
+            models = summarizer._models()
+            with results_lock:
+                results.append(models)
+
+        threads = [threading.Thread(target=worker) for _ in range(5)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10)
+
+        self.assertEqual(call_count, 1)
+        self.assertEqual(len(results), 5)
+        self.assertTrue(all(models == ["model/a:free"] for models in results))
+
+    def test_spacing_lock_exists_on_new_instance(self) -> None:
+        """A freshly constructed OpenRouterSummarizer must have concurrency locks."""
+        s = OpenRouterSummarizer(api_key="test-key")
+        self.assertIsInstance(s._spacing_lock, type(threading.Lock()))
+        self.assertIsInstance(s._models_lock, type(threading.Lock()))
+
+
+class SummarizeItemsTimeoutTests(unittest.TestCase):
+    @patch("src.summarizer._FUTURE_TIMEOUT_SECONDS", 0.01)
+    @patch("src.summarizer.summarize_item")
+    @patch("src.summarizer.OpenRouterSummarizer")
+    def test_timeout_isolated_to_single_item(self, mock_cls, mock_summarize_item) -> None:
+        mock_cls.return_value = _FakeSummarizer()
+
+        def summarize_side_effect(item, summarizer, run_date, sources_base_dir="data/sources", failed_base_dir="data/failed"):
+            if item["url"].endswith("/slow"):
+                time.sleep(0.05)
+                return {"status": "ok", "kind": "article", "url": item["url"], "summary_path": "slow.md"}
+            return {"status": "ok", "kind": item["kind"], "url": item["url"], "summary_path": "fast.md"}
+
+        mock_summarize_item.side_effect = summarize_side_effect
+
+        env_vars = {
+            "OPENROUTER_API_KEY": "key",
+            "OPENROUTER_MAX_CONCURRENCY": "2",
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir, _override_env(env_vars):
+            results = summarize_items(
+                items=[
+                    {"status": "ok", "kind": "article", "url": "https://example.com/slow", "content": "body"},
+                    {"status": "ok", "kind": "article", "url": "https://example.com/fast", "content": "body"},
+                ],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+            )
+
+            self.assertEqual(len(results), 2)
+            self.assertEqual(results[0]["status"], "failed")
+            self.assertEqual(results[0]["url"], "https://example.com/slow")
+            self.assertIn("timed out", results[0]["error"])
+            self.assertTrue(Path(results[0]["failure_path"]).exists())
+            self.assertEqual(results[1]["status"], "ok")
+            self.assertEqual(results[1]["url"], "https://example.com/fast")
 
 
 if __name__ == "__main__":

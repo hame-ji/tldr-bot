@@ -1,13 +1,26 @@
 import json
+import logging
 import os
 import random
 import re
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from datetime import date
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol
 
 import requests
+
+LOGGER = logging.getLogger(__name__)
+
+# Hard ceiling for per-backend thread pool size.  Env vars can request up to
+# this value but never exceed it.
+_MAX_BACKEND_CONCURRENCY = 3
+
+# Per-item timeout (seconds) when waiting for a summarization future.
+# Prevents the pipeline from hanging indefinitely if an API call stalls.
+_FUTURE_TIMEOUT_SECONDS = 600
 
 try:
     from content_fetcher import load_prompt, url_to_slug, write_failure_record
@@ -34,11 +47,16 @@ class _RetryingSummarizerBase:
         self.max_retries = max_retries
         self.initial_backoff_seconds = initial_backoff_seconds
         self.max_backoff_seconds = max_backoff_seconds
-        self._last_request_at = 0.0
+        self._next_request_at = 0.0
+        self._spacing_lock = threading.Lock()
 
     def _wait_for_min_spacing(self) -> None:
-        elapsed = time.monotonic() - self._last_request_at
-        wait_seconds = self.min_spacing_seconds - elapsed
+        with self._spacing_lock:
+            now = time.monotonic()
+            earliest_allowed = max(now, self._next_request_at)
+            wait_seconds = earliest_allowed - now
+            self._next_request_at = earliest_allowed + self.min_spacing_seconds
+        # Sleep outside the lock so other threads can reserve their slots.
         if wait_seconds > 0:
             time.sleep(wait_seconds)
 
@@ -82,12 +100,10 @@ class _RetryingSummarizerBase:
             try:
                 self._wait_for_min_spacing()
                 text = self._generate_once(prompt=prompt, contents=contents)
-                self._last_request_at = time.monotonic()
                 if not text:
                     raise RuntimeError("Response contained no text")
                 return text.strip()
             except Exception as exc:  # noqa: BLE001
-                self._last_request_at = time.monotonic()
                 last_error = exc
                 if not self._is_rate_limited(exc):
                     break
@@ -247,6 +263,7 @@ class OpenRouterSummarizer(_RetryingSummarizerBase):
         self.models_cache_path = models_cache_path
         self.models_cache_ttl_seconds = models_cache_ttl_seconds
         self._ordered_models: Optional[list[str]] = None
+        self._models_lock = threading.Lock()
         super().__init__(
             prompt_path=prompt_path,
             min_spacing_seconds=min_spacing_seconds,
@@ -286,7 +303,9 @@ class OpenRouterSummarizer(_RetryingSummarizerBase):
 
     def _models(self) -> list[str]:
         if self._ordered_models is None:
-            self._ordered_models = self._discover_free_models()
+            with self._models_lock:
+                if self._ordered_models is None:
+                    self._ordered_models = self._discover_free_models()
         return self._ordered_models
 
     def _generate_once(self, prompt: str, contents: list[str]) -> str:
@@ -396,20 +415,62 @@ def summarize_item(
     }
 
 
+def _clamp_concurrency(raw: str, default: int, max_allowed: int) -> int:
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        value = default
+    return max(1, min(value, max_allowed))
+
+
+def _timeout_result(
+    item: Dict[str, Any],
+    failed_base_dir: str,
+    timeout_seconds: int,
+) -> Dict[str, Any]:
+    kind = item.get("kind", "unknown")
+    url = item.get("url", "")
+    error = f"Summarization timed out after {timeout_seconds} seconds"
+    failure = write_failure_record(url=url, error=error, base_dir=failed_base_dir)
+    return {
+        "status": "failed",
+        "kind": kind,
+        "url": url,
+        "error": error,
+        "failure_path": str(failure),
+    }
+
+
 def summarize_items(
     items: list[Dict[str, Any]],
     run_date: date,
     sources_base_dir: str = "data/sources",
     failed_base_dir: str = "data/failed",
 ) -> list[Dict[str, Any]]:
-    article_candidates = [item for item in items if item.get("status") == "ok" and item.get("kind") == "article"]
-    has_youtube = any(item.get("status") == "ok" and item.get("kind") == "youtube" for item in items)
+    batch_start = time.monotonic()
 
-    if not article_candidates and not has_youtube:
+    # --- single pass: classify items by backend kind, keeping original indices ---
+    article_work: list[tuple[int, Dict[str, Any]]] = []
+    youtube_work: list[tuple[int, Dict[str, Any]]] = []
+    passthrough: list[tuple[int, Dict[str, Any]]] = []
+
+    for idx, item in enumerate(items):
+        if item.get("status") == "ok" and item.get("kind") == "article":
+            article_work.append((idx, item))
+        elif item.get("status") == "ok" and item.get("kind") == "youtube":
+            youtube_work.append((idx, item))
+        else:
+            passthrough.append((idx, item))
+
+    has_articles = len(article_work) > 0
+    has_youtube = len(youtube_work) > 0
+
+    if not has_articles and not has_youtube:
         return [summarize_item(item=item, summarizer=_NoopSummarizer(), run_date=run_date) for item in items]
 
+    # --- build OpenRouter summarizer (articles) ---
     article_summarizer: Optional[OpenRouterSummarizer] = None
-    if article_candidates:
+    if has_articles:
         api_key = os.environ.get("OPENROUTER_API_KEY")
         if not api_key:
             raise RuntimeError("Missing OPENROUTER_API_KEY environment variable")
@@ -441,21 +502,100 @@ def summarize_items(
             models_cache_ttl_seconds=models_cache_ttl_seconds,
         )
 
+    # --- eager YouTube prompt loading (before threads start) ---
     youtube_prompt_path = os.environ.get("NOTEBOOKLM_SUMMARIZE_PROMPT_PATH", "prompts/youtube_summarize.txt")
-    summarizer = _PipelineSummarizer(article_summarizer=article_summarizer, youtube_prompt_path=youtube_prompt_path)
+    youtube_prompt = load_prompt(youtube_prompt_path) if has_youtube else ""
 
-    results = []
-    for item in items:
-        results.append(
-            summarize_item(
-                item=item,
-                summarizer=summarizer,
-                run_date=run_date,
-                sources_base_dir=sources_base_dir,
-                failed_base_dir=failed_base_dir,
-            )
+    summarizer = _PipelineSummarizer(
+        article_summarizer=article_summarizer,
+        youtube_prompt=youtube_prompt,
+    )
+
+    # --- concurrency limits ---
+    openrouter_max = _clamp_concurrency(
+        os.environ.get("OPENROUTER_MAX_CONCURRENCY", "1"), default=1, max_allowed=_MAX_BACKEND_CONCURRENCY,
+    )
+    notebooklm_max = _clamp_concurrency(
+        os.environ.get("NOTEBOOKLM_MAX_CONCURRENCY", "1"), default=1, max_allowed=_MAX_BACKEND_CONCURRENCY,
+    )
+
+    results: list[Optional[Dict[str, Any]]] = [None] * len(items)
+
+    # --- handle passthrough items (non-summarizable) synchronously ---
+    for idx, item in passthrough:
+        results[idx] = summarize_item(
+            item=item,
+            summarizer=summarizer,
+            run_date=run_date,
+            sources_base_dir=sources_base_dir,
+            failed_base_dir=failed_base_dir,
         )
-    return results
+
+    def _timed_summarize(idx: int, item: Dict[str, Any]) -> tuple[int, Dict[str, Any]]:
+        item_start = time.monotonic()
+        result = summarize_item(
+            item=item,
+            summarizer=summarizer,
+            run_date=run_date,
+            sources_base_dir=sources_base_dir,
+            failed_base_dir=failed_base_dir,
+        )
+        elapsed = time.monotonic() - item_start
+        url = item.get("url", "?")
+        kind = item.get("kind", "?")
+        status = result.get("status", "?")
+        LOGGER.info("summarize_item kind=%s status=%s elapsed=%.2fs url=%s", kind, status, elapsed, url)
+        return (idx, result)
+
+    # --- dispatch to independent pools ---
+    timed_out = False
+    or_pool = ThreadPoolExecutor(max_workers=openrouter_max, thread_name_prefix="openrouter")
+    yt_pool = ThreadPoolExecutor(max_workers=notebooklm_max, thread_name_prefix="notebooklm")
+    try:
+        article_futures = [(or_pool.submit(_timed_summarize, idx, item), idx, item) for idx, item in article_work]
+        youtube_futures = [(yt_pool.submit(_timed_summarize, idx, item), idx, item) for idx, item in youtube_work]
+
+        for future, idx, item in article_futures:
+            try:
+                result_idx, result = future.result(timeout=_FUTURE_TIMEOUT_SECONDS)
+                results[result_idx] = result
+            except FutureTimeoutError:
+                timed_out = True
+                future.cancel()
+                results[idx] = _timeout_result(
+                    item=item,
+                    failed_base_dir=failed_base_dir,
+                    timeout_seconds=_FUTURE_TIMEOUT_SECONDS,
+                )
+
+        for future, idx, item in youtube_futures:
+            try:
+                result_idx, result = future.result(timeout=_FUTURE_TIMEOUT_SECONDS)
+                results[result_idx] = result
+            except FutureTimeoutError:
+                timed_out = True
+                future.cancel()
+                results[idx] = _timeout_result(
+                    item=item,
+                    failed_base_dir=failed_base_dir,
+                    timeout_seconds=_FUTURE_TIMEOUT_SECONDS,
+                )
+    finally:
+        or_pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
+        yt_pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
+
+    # --- aggregate logging ---
+    batch_elapsed = time.monotonic() - batch_start
+    ok_count = sum(1 for r in results if r and r.get("status") == "ok")
+    fail_count = sum(1 for r in results if r and r.get("status") == "failed")
+    LOGGER.info(
+        "summarize_batch total=%d ok=%d failed=%d articles=%d youtube=%d "
+        "openrouter_concurrency=%d notebooklm_concurrency=%d elapsed=%.2fs",
+        len(items), ok_count, fail_count, len(article_work), len(youtube_work),
+        openrouter_max, notebooklm_max, batch_elapsed,
+    )
+
+    return [r for r in results if r is not None]
 
 
 class _NoopSummarizer:
@@ -467,10 +607,13 @@ class _NoopSummarizer:
 
 
 class _PipelineSummarizer:
-    def __init__(self, article_summarizer: Optional[OpenRouterSummarizer], youtube_prompt_path: str) -> None:
+    def __init__(
+        self,
+        article_summarizer: Optional[OpenRouterSummarizer],
+        youtube_prompt: str,
+    ) -> None:
         self.article_summarizer = article_summarizer
-        self.youtube_prompt_path = youtube_prompt_path
-        self._youtube_prompt: Optional[str] = None
+        self._youtube_prompt = youtube_prompt
 
     def summarize_article(self, url: str, content: str) -> str:
         if self.article_summarizer is None:
@@ -478,6 +621,4 @@ class _PipelineSummarizer:
         return self.article_summarizer.summarize_article(url=url, content=content)
 
     def summarize_youtube(self, url: str) -> str:
-        if self._youtube_prompt is None:
-            self._youtube_prompt = load_prompt(self.youtube_prompt_path)
         return summarize_youtube_with_notebooklm(url=url, prompt=self._youtube_prompt)

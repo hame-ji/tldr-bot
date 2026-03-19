@@ -6,6 +6,7 @@ requires-python = ">=3.11,<3.12"
 dependencies = [
     "trafilatura==1.12.2",
     "lxml_html_clean==0.4.4",
+    "pypdf==5.4.0",
     "requests==2.32.5",
     "python-slugify==8.0.4",
     "notebooklm-py==0.3.4",

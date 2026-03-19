@@ -1,444 +1,119 @@
-import json
 import logging
 import os
-import random
-import re
-import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from datetime import date
-from pathlib import Path
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Dict, Optional
 
-import requests
+try:
+    from content_fetcher import (
+        ARTICLE_EXTRACT_TOO_SHORT,
+        HTTP_BLOCKED,
+        NETWORK_ERROR,
+        PDF_EXTRACT_FAILED,
+        TLS_ERROR,
+        load_prompt,
+    )
+    from notebooklm_summarizer import summarize_url as summarize_url_with_notebooklm
+    from youtube_summarizer import summarize_youtube as summarize_youtube_with_notebooklm
+    from summarization.common import (
+        Summarizer,
+        _clamp_concurrency,
+        _source_output_path,
+        _timeout_result,
+        summarize_failed_article_item,
+        summarize_item,
+    )
+    from summarization.openrouter_backend import OpenRouterSummarizer, _order_models
+except ImportError:
+    from src.content_fetcher import (
+        ARTICLE_EXTRACT_TOO_SHORT,
+        HTTP_BLOCKED,
+        NETWORK_ERROR,
+        PDF_EXTRACT_FAILED,
+        TLS_ERROR,
+        load_prompt,
+    )
+    from src.notebooklm_summarizer import summarize_url as summarize_url_with_notebooklm
+    from src.youtube_summarizer import summarize_youtube as summarize_youtube_with_notebooklm
+    from src.summarization.common import (
+        Summarizer,
+        _clamp_concurrency,
+        _source_output_path,
+        _timeout_result,
+        summarize_failed_article_item,
+        summarize_item,
+    )
+    from src.summarization.openrouter_backend import OpenRouterSummarizer, _order_models
 
 LOGGER = logging.getLogger(__name__)
 
-# Hard ceiling for per-backend thread pool size.  Env vars can request up to
-# this value but never exceed it.
 _MAX_BACKEND_CONCURRENCY = 3
-
-# Per-item timeout (seconds) when waiting for a summarization future.
-# Prevents the pipeline from hanging indefinitely if an API call stalls.
 _FUTURE_TIMEOUT_SECONDS = 600
 
-try:
-    from content_fetcher import load_prompt, url_to_slug, write_failure_record
-except ImportError:
-    from src.content_fetcher import load_prompt, url_to_slug, write_failure_record
-
-try:
-    from youtube_summarizer import summarize_youtube as summarize_youtube_with_notebooklm
-except ImportError:
-    from src.youtube_summarizer import summarize_youtube as summarize_youtube_with_notebooklm
+_ARTICLE_FETCH_FAILURE_REASONS = {
+    ARTICLE_EXTRACT_TOO_SHORT,
+    HTTP_BLOCKED,
+    NETWORK_ERROR,
+    PDF_EXTRACT_FAILED,
+    TLS_ERROR,
+}
 
 
-class _RetryingSummarizerBase:
-    def __init__(
-        self,
-        prompt_path: str,
-        min_spacing_seconds: float,
-        max_retries: int,
-        initial_backoff_seconds: float,
-        max_backoff_seconds: float,
-    ) -> None:
-        self.prompt_path = prompt_path
-        self.min_spacing_seconds = min_spacing_seconds
-        self.max_retries = max_retries
-        self.initial_backoff_seconds = initial_backoff_seconds
-        self.max_backoff_seconds = max_backoff_seconds
-        self._next_request_at = 0.0
-        self._spacing_lock = threading.Lock()
+def _env_enabled(name: str, default: bool) -> bool:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
 
-    def _wait_for_min_spacing(self) -> None:
-        with self._spacing_lock:
-            now = time.monotonic()
-            earliest_allowed = max(now, self._next_request_at)
-            wait_seconds = earliest_allowed - now
-            self._next_request_at = earliest_allowed + self.min_spacing_seconds
-        # Sleep outside the lock so other threads can reserve their slots.
-        if wait_seconds > 0:
-            time.sleep(wait_seconds)
-
-    def _is_rate_limited(self, error: Exception) -> bool:
-        text = str(error).lower()
-        return ("429" in text) or ("rate" in text and "limit" in text)
-
-    def _extract_retry_after(self, error: Exception) -> Optional[float]:
-        text = str(error)
-
-        retry_after_match = re.search(r"retry[-_ ]after\s*[:=]\s*(\d+)", text, flags=re.IGNORECASE)
-        if retry_after_match:
-            return float(retry_after_match.group(1))
-
-        seconds_match = re.search(r"retry_delay\D+seconds\D+(\d+)", text, flags=re.IGNORECASE)
-        if seconds_match:
-            return float(seconds_match.group(1))
-
-        return None
-
-    def _compute_backoff_seconds(self, attempt: int, error: Exception) -> float:
-        retry_after = self._extract_retry_after(error)
-        if retry_after is not None:
-            return min(retry_after, self.max_backoff_seconds)
-
-        exp = self.initial_backoff_seconds * (2 ** attempt)
-        jitter = random.uniform(0.0, 1.0)
-        return min(exp + jitter, self.max_backoff_seconds)
-
-    def _load_prompt(self) -> str:
-        return load_prompt(self.prompt_path)
-
-    def _generate_once(self, prompt: str, contents: list[str]) -> str:
-        raise NotImplementedError
-
-    def _generate_with_retry(self, contents: list[str], error_prefix: str) -> str:
-        prompt = self._load_prompt()
-        last_error: Optional[Exception] = None
-
-        for attempt in range(self.max_retries):
-            try:
-                self._wait_for_min_spacing()
-                text = self._generate_once(prompt=prompt, contents=contents)
-                if not text:
-                    raise RuntimeError("Response contained no text")
-                return text.strip()
-            except Exception as exc:  # noqa: BLE001
-                last_error = exc
-                if not self._is_rate_limited(exc):
-                    break
-                if attempt == self.max_retries - 1:
-                    break
-                time.sleep(self._compute_backoff_seconds(attempt=attempt, error=exc))
-
-        if last_error is None:
-            raise RuntimeError(error_prefix + ": unknown error")
-        raise RuntimeError(error_prefix + ": " + str(last_error)) from last_error
-
-
-def _is_zero_price(value: Any) -> bool:
-    if value is None:
+    normalized = raw.strip().lower()
+    if normalized in {"0", "false", "no", "off"}:
         return False
-    try:
-        return float(str(value).strip()) == 0.0
-    except ValueError:
-        return False
-
-
-def _is_free_openrouter_model(model: dict[str, Any]) -> bool:
-    model_id = model.get("id")
-    if isinstance(model_id, str) and model_id.endswith(":free"):
+    if normalized in {"1", "true", "yes", "on"}:
         return True
+    return default
 
-    pricing = model.get("pricing")
-    if not isinstance(pricing, dict):
+
+def _is_article_fallback_candidate(item: Dict[str, Any], fallback_enabled: bool) -> bool:
+    if not fallback_enabled:
         return False
-
-    prompt_price = pricing.get("prompt")
-    completion_price = pricing.get("completion")
-    return _is_zero_price(prompt_price) and _is_zero_price(completion_price)
-
-
-def _model_quality_score(model_id: str, context_length: int) -> tuple[int, int]:
-    text = model_id.lower()
-    heuristic = 0
-    if "gemini" in text:
-        heuristic += 5
-    if "qwen" in text:
-        heuristic += 4
-    if "deepseek" in text:
-        heuristic += 4
-    if "llama" in text:
-        heuristic += 3
-    if "instruct" in text:
-        heuristic += 2
-    return (heuristic, context_length)
+    if item.get("status") != "failed" or item.get("kind") != "article":
+        return False
+    reason = item.get("reason")
+    return isinstance(reason, str) and reason in _ARTICLE_FETCH_FAILURE_REASONS
 
 
-def _order_models(models: list[dict[str, Any]], preferred_models: list[str]) -> list[str]:
-    free_models: list[tuple[tuple[int, int], str]] = []
-    for model in models:
-        model_id = model.get("id")
-        if not isinstance(model_id, str):
-            continue
-        if not _is_free_openrouter_model(model):
-            continue
-
-        context_length_raw = model.get("context_length", 0)
-        try:
-            context_length = int(context_length_raw)
-        except (TypeError, ValueError):
-            context_length = 0
-
-        free_models.append((_model_quality_score(model_id, context_length), model_id))
-
-    if not free_models:
-        return []
-
-    free_model_ids = {model_id for _, model_id in free_models}
-    ordered: list[str] = []
-    for preferred in preferred_models:
-        if preferred in free_model_ids and preferred not in ordered:
-            ordered.append(preferred)
-
-    for _, model_id in sorted(free_models, key=lambda item: item[0], reverse=True):
-        if model_id not in ordered:
-            ordered.append(model_id)
-
-    return ordered
-
-
-def _load_cached_models(cache_path: str, ttl_seconds: int) -> list[str]:
-    path = Path(cache_path)
-    if not path.exists():
-        return []
-
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return []
-
-    if not isinstance(payload, dict):
-        return []
-
-    fetched_at = payload.get("fetched_at")
-    models = payload.get("models")
-    if not isinstance(fetched_at, (int, float)):
-        return []
-    if not isinstance(models, list) or not all(isinstance(item, str) for item in models):
-        return []
-
-    if time.time() - float(fetched_at) > ttl_seconds:
-        return []
-
-    return models
-
-
-def _save_cached_models(cache_path: str, models: list[str]) -> None:
-    path = Path(cache_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "fetched_at": time.time(),
-        "models": models,
-    }
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-
-
-def _extract_openrouter_text(payload: dict[str, Any]) -> str:
-    choices = payload.get("choices")
-    if not isinstance(choices, list) or len(choices) == 0:
-        return ""
-
-    first_choice = choices[0]
-    if not isinstance(first_choice, dict):
-        return ""
-
-    message = first_choice.get("message")
-    if not isinstance(message, dict):
-        return ""
-
-    content = message.get("content")
-    if not isinstance(content, str):
-        return ""
-    return content.strip()
-
-
-class OpenRouterSummarizer(_RetryingSummarizerBase):
-    def __init__(
-        self,
-        api_key: str,
-        prompt_path: str = "prompts/summarize.txt",
-        base_url: str = "https://openrouter.ai/api/v1",
-        preferred_models: Optional[list[str]] = None,
-        models_cache_path: str = "data/cache/openrouter_models.json",
-        models_cache_ttl_seconds: int = 21600,
-        min_spacing_seconds: float = 1.0,
-        max_retries: int = 6,
-        initial_backoff_seconds: float = 5.0,
-        max_backoff_seconds: float = 120.0,
-    ) -> None:
-        self.api_key = api_key
-        self.base_url = base_url.rstrip("/")
-        self.preferred_models = preferred_models or []
-        self.models_cache_path = models_cache_path
-        self.models_cache_ttl_seconds = models_cache_ttl_seconds
-        self._ordered_models: Optional[list[str]] = None
-        self._models_lock = threading.Lock()
-        super().__init__(
-            prompt_path=prompt_path,
-            min_spacing_seconds=min_spacing_seconds,
-            max_retries=max_retries,
-            initial_backoff_seconds=initial_backoff_seconds,
-            max_backoff_seconds=max_backoff_seconds,
-        )
-
-    def _discover_free_models(self) -> list[str]:
-        cached_models = _load_cached_models(self.models_cache_path, self.models_cache_ttl_seconds)
-        if cached_models:
-            return cached_models
-
-        response = requests.get(
-            self.base_url + "/models",
-            headers={"Authorization": "Bearer " + self.api_key},
-            timeout=(10, 30),
-        )
-        if response.status_code >= 400:
-            raise RuntimeError(f"OpenRouter model discovery failed ({response.status_code}): {response.text[:300]}")
-
-        try:
-            payload = response.json()
-        except ValueError as exc:
-            raise RuntimeError("OpenRouter model discovery returned invalid JSON") from exc
-
-        model_objects = payload.get("data")
-        if not isinstance(model_objects, list):
-            raise RuntimeError("OpenRouter model discovery response missing data list")
-
-        ordered = _order_models(model_objects, self.preferred_models)
-        if not ordered:
-            raise RuntimeError("No free OpenRouter models available")
-
-        _save_cached_models(self.models_cache_path, ordered)
-        return ordered
-
-    def _models(self) -> list[str]:
-        if self._ordered_models is None:
-            with self._models_lock:
-                if self._ordered_models is None:
-                    self._ordered_models = self._discover_free_models()
-        return self._ordered_models
-
-    def _generate_once(self, prompt: str, contents: list[str]) -> str:
-        user_content = "\n\n".join(contents)
-        last_error: Optional[Exception] = None
-
-        for model_name in self._models():
-            try:
-                response = requests.post(
-                    self.base_url + "/chat/completions",
-                    headers={
-                        "Authorization": "Bearer " + self.api_key,
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": model_name,
-                        "messages": [
-                            {"role": "system", "content": prompt},
-                            {"role": "user", "content": user_content},
-                        ],
-                        "temperature": 0.2,
-                    },
-                    timeout=(10, 60),
-                )
-
-                if response.status_code in (401, 403):
-                    raise RuntimeError("OpenRouter authentication failed")
-                if response.status_code >= 400:
-                    raise RuntimeError(f"OpenRouter {response.status_code}: {response.text[:300]}")
-
-                try:
-                    payload = response.json()
-                except ValueError as exc:
-                    raise RuntimeError("OpenRouter response returned invalid JSON") from exc
-
-                text = _extract_openrouter_text(payload)
-                if not text:
-                    raise RuntimeError("OpenRouter response contained no text")
-                return text
-            except Exception as exc:  # noqa: BLE001
-                last_error = exc
-                if "authentication failed" in str(exc).lower():
-                    raise
-                continue
-
-        if last_error is None:
-            raise RuntimeError("OpenRouter summarization failed: no model candidates")
-        raise last_error
-
+class _NoopSummarizer:
     def summarize_article(self, url: str, content: str) -> str:
-        return self._generate_with_retry(["URL: " + url, content], error_prefix="OpenRouter summarization failed")
+        raise RuntimeError("No article summarizer configured")
 
-
-def _source_output_path(url: str, run_date: date, base_dir: str = "data/sources") -> Path:
-    slug = url_to_slug(url, fallback="source")
-    day = run_date.isoformat()
-    out_dir = Path(base_dir) / day
-    out_dir.mkdir(parents=True, exist_ok=True)
-    return out_dir / (slug + ".md")
-
-
-class Summarizer(Protocol):
-    def summarize_article(self, url: str, content: str) -> str:
-        ...
+    def summarize_article_from_url(self, url: str) -> str:
+        raise RuntimeError("No article URL fallback configured")
 
     def summarize_youtube(self, url: str) -> str:
-        ...
+        raise RuntimeError("No youtube summarization candidates")
 
 
-def summarize_item(
-    item: Dict[str, Any],
-    summarizer: Summarizer,
-    run_date: date,
-    sources_base_dir: str = "data/sources",
-    failed_base_dir: str = "data/failed",
-) -> Dict[str, Any]:
-    if item.get("status") != "ok":
-        return item
+class _PipelineSummarizer:
+    def __init__(
+        self,
+        article_summarizer: Optional[OpenRouterSummarizer],
+        youtube_prompt: str,
+        article_fallback_prompt: str,
+    ) -> None:
+        self.article_summarizer = article_summarizer
+        self._youtube_prompt = youtube_prompt
+        self._article_fallback_prompt = article_fallback_prompt
 
-    kind = item.get("kind")
-    if kind not in {"article", "youtube"}:
-        return {"status": "ignored", "kind": item.get("kind", "unknown"), "url": item.get("url", "")}
+    def summarize_article(self, url: str, content: str) -> str:
+        if self.article_summarizer is None:
+            raise RuntimeError("No article summarizer configured")
+        return self.article_summarizer.summarize_article(url=url, content=content)
 
-    url = item["url"]
-    try:
-        if kind == "article":
-            summary = summarizer.summarize_article(url=url, content=item["content"])
-        else:
-            summary = summarizer.summarize_youtube(url=url)
-    except Exception as exc:  # noqa: BLE001
-        failure = write_failure_record(url=url, error=str(exc), base_dir=failed_base_dir)
-        return {
-            "status": "failed",
-            "kind": kind,
-            "url": url,
-            "error": str(exc),
-            "failure_path": str(failure),
-        }
+    def summarize_article_from_url(self, url: str) -> str:
+        return summarize_url_with_notebooklm(url=url, prompt=self._article_fallback_prompt)
 
-    output_path = _source_output_path(url=url, run_date=run_date, base_dir=sources_base_dir)
-    output_path.write_text(summary + "\n", encoding="utf-8")
-    return {
-        "status": "ok",
-        "kind": kind,
-        "url": url,
-        "summary_path": str(output_path),
-    }
-
-
-def _clamp_concurrency(raw: str, default: int, max_allowed: int) -> int:
-    try:
-        value = int(raw)
-    except (TypeError, ValueError):
-        value = default
-    return max(1, min(value, max_allowed))
-
-
-def _timeout_result(
-    item: Dict[str, Any],
-    failed_base_dir: str,
-    timeout_seconds: int,
-) -> Dict[str, Any]:
-    kind = item.get("kind", "unknown")
-    url = item.get("url", "")
-    error = f"Summarization timed out after {timeout_seconds} seconds"
-    failure = write_failure_record(url=url, error=error, base_dir=failed_base_dir)
-    return {
-        "status": "failed",
-        "kind": kind,
-        "url": url,
-        "error": error,
-        "failure_path": str(failure),
-    }
+    def summarize_youtube(self, url: str) -> str:
+        return summarize_youtube_with_notebooklm(url=url, prompt=self._youtube_prompt)
 
 
 def summarize_items(
@@ -449,26 +124,38 @@ def summarize_items(
 ) -> list[Dict[str, Any]]:
     batch_start = time.monotonic()
 
-    # --- single pass: classify items by backend kind, keeping original indices ---
+    article_fallback_enabled = _env_enabled("NOTEBOOKLM_ARTICLE_FALLBACK_ENABLED", default=True)
+
     article_work: list[tuple[int, Dict[str, Any]]] = []
-    youtube_work: list[tuple[int, Dict[str, Any]]] = []
+    notebooklm_work: list[tuple[int, Dict[str, Any], str]] = []
     passthrough: list[tuple[int, Dict[str, Any]]] = []
 
     for idx, item in enumerate(items):
         if item.get("status") == "ok" and item.get("kind") == "article":
             article_work.append((idx, item))
         elif item.get("status") == "ok" and item.get("kind") == "youtube":
-            youtube_work.append((idx, item))
+            notebooklm_work.append((idx, item, "youtube"))
+        elif _is_article_fallback_candidate(item, article_fallback_enabled):
+            notebooklm_work.append((idx, item, "article_fallback"))
         else:
             passthrough.append((idx, item))
 
     has_articles = len(article_work) > 0
-    has_youtube = len(youtube_work) > 0
+    has_notebooklm = len(notebooklm_work) > 0
 
-    if not has_articles and not has_youtube:
-        return [summarize_item(item=item, summarizer=_NoopSummarizer(), run_date=run_date) for item in items]
+    if not has_articles and not has_notebooklm:
+        noop = _NoopSummarizer()
+        return [
+            summarize_item(
+                item=item,
+                summarizer=noop,
+                run_date=run_date,
+                sources_base_dir=sources_base_dir,
+                failed_base_dir=failed_base_dir,
+            )
+            for item in items
+        ]
 
-    # --- build OpenRouter summarizer (articles) ---
     article_summarizer: Optional[OpenRouterSummarizer] = None
     if has_articles:
         api_key = os.environ.get("OPENROUTER_API_KEY")
@@ -477,11 +164,7 @@ def summarize_items(
 
         base_url = os.environ.get("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1")
         preferred_models_raw = os.environ.get("OPENROUTER_PREFERRED_MODELS", "")
-        preferred_models = [
-            model_name.strip()
-            for model_name in preferred_models_raw.split(",")
-            if model_name.strip()
-        ]
+        preferred_models = [model_name.strip() for model_name in preferred_models_raw.split(",") if model_name.strip()]
 
         min_spacing_seconds = float(os.environ.get("OPENROUTER_MIN_SPACING_SECONDS", "1"))
         max_retries = int(os.environ.get("OPENROUTER_MAX_RETRIES", "6"))
@@ -502,26 +185,39 @@ def summarize_items(
             models_cache_ttl_seconds=models_cache_ttl_seconds,
         )
 
-    # --- eager YouTube prompt loading (before threads start) ---
-    youtube_prompt_path = os.environ.get("NOTEBOOKLM_SUMMARIZE_PROMPT_PATH", "prompts/youtube_summarize.txt")
-    youtube_prompt = load_prompt(youtube_prompt_path) if has_youtube else ""
+    youtube_prompt = ""
+    article_fallback_prompt = ""
+    if has_notebooklm:
+        youtube_prompt_path = os.environ.get("NOTEBOOKLM_SUMMARIZE_PROMPT_PATH", "prompts/youtube_summarize.txt")
+        article_fallback_prompt_path = os.environ.get(
+            "NOTEBOOKLM_ARTICLE_SUMMARIZE_PROMPT_PATH",
+            "prompts/summarize.txt",
+        )
+        work_types = {work_type for _, _, work_type in notebooklm_work}
+        if "youtube" in work_types:
+            youtube_prompt = load_prompt(youtube_prompt_path)
+        if "article_fallback" in work_types:
+            article_fallback_prompt = load_prompt(article_fallback_prompt_path)
 
-    summarizer = _PipelineSummarizer(
+    summarizer: Summarizer = _PipelineSummarizer(
         article_summarizer=article_summarizer,
         youtube_prompt=youtube_prompt,
+        article_fallback_prompt=article_fallback_prompt,
     )
 
-    # --- concurrency limits ---
     openrouter_max = _clamp_concurrency(
-        os.environ.get("OPENROUTER_MAX_CONCURRENCY", "1"), default=1, max_allowed=_MAX_BACKEND_CONCURRENCY,
+        os.environ.get("OPENROUTER_MAX_CONCURRENCY", "1"),
+        default=1,
+        max_allowed=_MAX_BACKEND_CONCURRENCY,
     )
     notebooklm_max = _clamp_concurrency(
-        os.environ.get("NOTEBOOKLM_MAX_CONCURRENCY", "1"), default=1, max_allowed=_MAX_BACKEND_CONCURRENCY,
+        os.environ.get("NOTEBOOKLM_MAX_CONCURRENCY", "1"),
+        default=1,
+        max_allowed=_MAX_BACKEND_CONCURRENCY,
     )
 
     results: list[Optional[Dict[str, Any]]] = [None] * len(items)
 
-    # --- handle passthrough items (non-summarizable) synchronously ---
     for idx, item in passthrough:
         results[idx] = summarize_item(
             item=item,
@@ -531,29 +227,50 @@ def summarize_items(
             failed_base_dir=failed_base_dir,
         )
 
-    def _timed_summarize(idx: int, item: Dict[str, Any]) -> tuple[int, Dict[str, Any]]:
+    def _timed_summarize(idx: int, item: Dict[str, Any], work_type: str) -> tuple[int, Dict[str, Any]]:
         item_start = time.monotonic()
-        result = summarize_item(
-            item=item,
-            summarizer=summarizer,
-            run_date=run_date,
-            sources_base_dir=sources_base_dir,
-            failed_base_dir=failed_base_dir,
-        )
+        if work_type == "article_fallback":
+            result = summarize_failed_article_item(
+                item=item,
+                summarizer=summarizer,
+                run_date=run_date,
+                sources_base_dir=sources_base_dir,
+                failed_base_dir=failed_base_dir,
+            )
+        else:
+            result = summarize_item(
+                item=item,
+                summarizer=summarizer,
+                run_date=run_date,
+                sources_base_dir=sources_base_dir,
+                failed_base_dir=failed_base_dir,
+            )
         elapsed = time.monotonic() - item_start
         url = item.get("url", "?")
         kind = item.get("kind", "?")
         status = result.get("status", "?")
-        LOGGER.info("summarize_item kind=%s status=%s elapsed=%.2fs url=%s", kind, status, elapsed, url)
+        LOGGER.info(
+            "summarize_item kind=%s work_type=%s status=%s elapsed=%.2fs url=%s",
+            kind,
+            work_type,
+            status,
+            elapsed,
+            url,
+        )
         return (idx, result)
 
-    # --- dispatch to independent pools ---
     timed_out = False
-    or_pool = ThreadPoolExecutor(max_workers=openrouter_max, thread_name_prefix="openrouter")
-    yt_pool = ThreadPoolExecutor(max_workers=notebooklm_max, thread_name_prefix="notebooklm")
+    or_pool = ThreadPoolExecutor(max_workers=openrouter_max, thread_name_prefix="openrouter") if has_articles else None
+    notebooklm_pool = ThreadPoolExecutor(max_workers=notebooklm_max, thread_name_prefix="notebooklm") if has_notebooklm else None
     try:
-        article_futures = [(or_pool.submit(_timed_summarize, idx, item), idx, item) for idx, item in article_work]
-        youtube_futures = [(yt_pool.submit(_timed_summarize, idx, item), idx, item) for idx, item in youtube_work]
+        article_futures = [
+            (or_pool.submit(_timed_summarize, idx, item, "article"), idx, item)
+            for idx, item in article_work
+        ] if or_pool else []
+        notebooklm_futures = [
+            (notebooklm_pool.submit(_timed_summarize, idx, item, work_type), idx, item)
+            for idx, item, work_type in notebooklm_work
+        ] if notebooklm_pool else []
 
         for future, idx, item in article_futures:
             try:
@@ -568,7 +285,7 @@ def summarize_items(
                     timeout_seconds=_FUTURE_TIMEOUT_SECONDS,
                 )
 
-        for future, idx, item in youtube_futures:
+        for future, idx, item in notebooklm_futures:
             try:
                 result_idx, result = future.result(timeout=_FUTURE_TIMEOUT_SECONDS)
                 results[result_idx] = result
@@ -581,44 +298,28 @@ def summarize_items(
                     timeout_seconds=_FUTURE_TIMEOUT_SECONDS,
                 )
     finally:
-        or_pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
-        yt_pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
+        if or_pool:
+            or_pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
+        if notebooklm_pool:
+            notebooklm_pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
 
-    # --- aggregate logging ---
     batch_elapsed = time.monotonic() - batch_start
     ok_count = sum(1 for r in results if r and r.get("status") == "ok")
     fail_count = sum(1 for r in results if r and r.get("status") == "failed")
+    notebooklm_article_count = sum(1 for _, _, work_type in notebooklm_work if work_type == "article_fallback")
+    youtube_count = sum(1 for _, _, work_type in notebooklm_work if work_type == "youtube")
     LOGGER.info(
-        "summarize_batch total=%d ok=%d failed=%d articles=%d youtube=%d "
+        "summarize_batch total=%d ok=%d failed=%d articles=%d article_fallbacks=%d youtube=%d "
         "openrouter_concurrency=%d notebooklm_concurrency=%d elapsed=%.2fs",
-        len(items), ok_count, fail_count, len(article_work), len(youtube_work),
-        openrouter_max, notebooklm_max, batch_elapsed,
+        len(items),
+        ok_count,
+        fail_count,
+        len(article_work),
+        notebooklm_article_count,
+        youtube_count,
+        openrouter_max,
+        notebooklm_max,
+        batch_elapsed,
     )
 
     return [r for r in results if r is not None]
-
-
-class _NoopSummarizer:
-    def summarize_article(self, url: str, content: str) -> str:
-        raise RuntimeError("No article summarization candidates")
-
-    def summarize_youtube(self, url: str) -> str:
-        raise RuntimeError("No youtube summarization candidates")
-
-
-class _PipelineSummarizer:
-    def __init__(
-        self,
-        article_summarizer: Optional[OpenRouterSummarizer],
-        youtube_prompt: str,
-    ) -> None:
-        self.article_summarizer = article_summarizer
-        self._youtube_prompt = youtube_prompt
-
-    def summarize_article(self, url: str, content: str) -> str:
-        if self.article_summarizer is None:
-            raise RuntimeError("No article summarizer configured")
-        return self.article_summarizer.summarize_article(url=url, content=content)
-
-    def summarize_youtube(self, url: str) -> str:
-        return summarize_youtube_with_notebooklm(url=url, prompt=self._youtube_prompt)

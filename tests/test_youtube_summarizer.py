@@ -58,7 +58,7 @@ class ResolveStoragePathTests(unittest.TestCase):
         with patch.dict(os.environ, env):
             os.environ.pop("NOTEBOOKLM_STORAGE_PATH", None)
             os.environ.pop("NOTEBOOKLM_STORAGE_STATE", None)
-            with patch("src.youtube_summarizer.Path.home") as mock_home:
+            with patch("src.notebooklm_summarizer.Path.home") as mock_home:
                 mock_home.return_value = Path("/nonexistent-home-xyz")
                 with self.assertRaises(YouTubeSummaryError) as ctx:
                     _resolve_storage_path()
@@ -95,8 +95,8 @@ class SummarizeYoutubeTests(unittest.TestCase):
 
         return mock_client
 
-    @patch("src.youtube_summarizer._resolve_storage_path")
-    @patch("src.youtube_summarizer.NotebookLMClient")
+    @patch("src.notebooklm_summarizer._resolve_storage_path")
+    @patch("src.notebooklm_summarizer.NotebookLMClient")
     def test_happy_path_returns_answer(self, mock_client_cls, mock_resolve) -> None:
         mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
         mock_client = self._make_mock_client("video summary text")
@@ -110,23 +110,23 @@ class SummarizeYoutubeTests(unittest.TestCase):
         mock_client.chat.ask.assert_called_once_with("notebook-id-1", "Summarize this")
         mock_client.notebooks.delete.assert_called_once_with("notebook-id-1")
 
-    @patch("src.youtube_summarizer._resolve_storage_path")
-    @patch("src.youtube_summarizer.NotebookLMClient")
+    @patch("src.notebooklm_summarizer._resolve_storage_path")
+    @patch("src.notebooklm_summarizer.NotebookLMClient")
     def test_cleanup_failure_does_not_override_success(self, mock_client_cls, mock_resolve) -> None:
         mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
         mock_client = self._make_mock_client("video summary text")
         mock_client.notebooks.delete = AsyncMock(side_effect=RuntimeError("cleanup failed"))
         mock_client_cls.from_storage = AsyncMock(return_value=mock_client)
 
-        with self.assertLogs("src.youtube_summarizer", level="WARNING") as logs:
+        with self.assertLogs("src.notebooklm_summarizer", level="WARNING") as logs:
             result = summarize_youtube("https://youtu.be/abc", "Summarize this")
 
         self.assertEqual(result, "video summary text")
         mock_client.notebooks.delete.assert_called_once_with("notebook-id-1")
         self.assertTrue(any("cleanup failed" in line for line in logs.output))
 
-    @patch("src.youtube_summarizer._resolve_storage_path")
-    @patch("src.youtube_summarizer.NotebookLMClient")
+    @patch("src.notebooklm_summarizer._resolve_storage_path")
+    @patch("src.notebooklm_summarizer.NotebookLMClient")
     def test_temp_storage_file_removed_after_success(self, mock_client_cls, mock_resolve) -> None:
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             f.write(b"{}")
@@ -141,10 +141,10 @@ class SummarizeYoutubeTests(unittest.TestCase):
         self.assertEqual(result, "video summary text")
         self.assertFalse(Path(tmppath).exists())
 
-    @patch("src.youtube_summarizer._resolve_storage_path")
-    @patch("src.youtube_summarizer.NotebookLMClient")
+    @patch("src.notebooklm_summarizer._resolve_storage_path")
+    @patch("src.notebooklm_summarizer.NotebookLMClient")
     def test_notebook_deleted_even_on_source_failure(self, mock_client_cls, mock_resolve) -> None:
-        from notebooklm.exceptions import SourceAddError
+        from src.notebooklm_summarizer import SourceAddError
         mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
         mock_client = self._make_mock_client()
         mock_client.sources.add_url = AsyncMock(side_effect=SourceAddError("https://youtu.be/abc"))
@@ -156,8 +156,8 @@ class SummarizeYoutubeTests(unittest.TestCase):
         self.assertEqual(ctx.exception.reason, YOUTUBE_SOURCE_FAILED)
         mock_client.notebooks.delete.assert_called_once_with("notebook-id-1")
 
-    @patch("src.youtube_summarizer._resolve_storage_path")
-    @patch("src.youtube_summarizer.NotebookLMClient")
+    @patch("src.notebooklm_summarizer._resolve_storage_path")
+    @patch("src.notebooklm_summarizer.NotebookLMClient")
     def test_empty_answer_raises_summary_failed(self, mock_client_cls, mock_resolve) -> None:
         mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
         mock_client = self._make_mock_client(answer="")
@@ -169,8 +169,8 @@ class SummarizeYoutubeTests(unittest.TestCase):
         self.assertEqual(ctx.exception.reason, YOUTUBE_SUMMARY_FAILED)
         mock_client.notebooks.delete.assert_called_once_with("notebook-id-1")
 
-    @patch("src.youtube_summarizer._resolve_storage_path")
-    @patch("src.youtube_summarizer.NotebookLMClient")
+    @patch("src.notebooklm_summarizer._resolve_storage_path")
+    @patch("src.notebooklm_summarizer.NotebookLMClient")
     def test_whitespace_answer_raises_summary_failed(self, mock_client_cls, mock_resolve) -> None:
         mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
         mock_client = self._make_mock_client(answer="   \n\t")
@@ -182,10 +182,10 @@ class SummarizeYoutubeTests(unittest.TestCase):
         self.assertEqual(ctx.exception.reason, YOUTUBE_SUMMARY_FAILED)
         mock_client.notebooks.delete.assert_called_once_with("notebook-id-1")
 
-    @patch("src.youtube_summarizer._resolve_storage_path")
-    @patch("src.youtube_summarizer.NotebookLMClient")
+    @patch("src.notebooklm_summarizer._resolve_storage_path")
+    @patch("src.notebooklm_summarizer.NotebookLMClient")
     def test_auth_error_raises_auth_expired(self, mock_client_cls, mock_resolve) -> None:
-        from notebooklm.exceptions import AuthError
+        from src.notebooklm_summarizer import AuthError
         mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
         mock_client = self._make_mock_client()
         mock_client.__aenter__ = AsyncMock(side_effect=AuthError("session expired"))

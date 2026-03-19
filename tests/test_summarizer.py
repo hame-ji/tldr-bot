@@ -39,6 +39,9 @@ class _FakeSummarizer:
     def summarize_article(self, url: str, content: str) -> str:
         return "article summary for " + url
 
+    def summarize_article_from_url(self, url: str) -> str:
+        return "article fallback summary for " + url
+
     def summarize_youtube(self, url: str) -> str:
         return "youtube summary for " + url
 
@@ -226,6 +229,53 @@ class SummarizerTests(unittest.TestCase):
             self.assertEqual(results[0]["kind"], "youtube")
             self.assertIn(YOUTUBE_SOURCE_FAILED, results[0]["error"])
             self.assertTrue(Path(results[0]["failure_path"]).exists())
+
+    @patch("src.summarizer.summarize_url_with_notebooklm")
+    def test_failed_article_uses_notebooklm_fallback_by_default(self, mock_summarize_url) -> None:
+        mock_summarize_url.return_value = "article fallback summary"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            results = summarize_items(
+                items=[
+                    {
+                        "status": "failed",
+                        "kind": "article",
+                        "url": "https://example.com/blocked",
+                        "error": "403 Client Error",
+                        "reason": "http_blocked",
+                        "failure_path": str(Path(tmpdir) / "failed.md"),
+                    }
+                ],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+            )
+
+        self.assertEqual(results[0]["status"], "ok")
+        self.assertEqual(results[0]["kind"], "article")
+        mock_summarize_url.assert_called_once_with(url="https://example.com/blocked", prompt=ANY)
+
+    @patch("src.summarizer.summarize_url_with_notebooklm")
+    def test_failed_article_fallback_can_be_disabled(self, mock_summarize_url) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir, _override_env({"NOTEBOOKLM_ARTICLE_FALLBACK_ENABLED": "false"}):
+            item = {
+                "status": "failed",
+                "kind": "article",
+                "url": "https://example.com/blocked",
+                "error": "403 Client Error",
+                "reason": "http_blocked",
+                "failure_path": str(Path(tmpdir) / "failed.md"),
+            }
+            results = summarize_items(
+                items=[item],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+            )
+
+        self.assertEqual(results[0]["status"], "failed")
+        self.assertEqual(results[0]["url"], item["url"])
+        mock_summarize_url.assert_not_called()
 
 
 class ClampConcurrencyTests(unittest.TestCase):

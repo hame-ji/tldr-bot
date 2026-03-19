@@ -6,7 +6,14 @@ from datetime import date
 from typing import Any, Dict, Optional
 
 try:
-    from content_fetcher import load_prompt
+    from content_fetcher import (
+        ARTICLE_EXTRACT_TOO_SHORT,
+        HTTP_BLOCKED,
+        NETWORK_ERROR,
+        PDF_EXTRACT_FAILED,
+        TLS_ERROR,
+        load_prompt,
+    )
     from notebooklm_summarizer import summarize_url as summarize_url_with_notebooklm
     from youtube_summarizer import summarize_youtube as summarize_youtube_with_notebooklm
     from summarization.common import (
@@ -19,7 +26,14 @@ try:
     )
     from summarization.openrouter_backend import OpenRouterSummarizer, _order_models
 except ImportError:
-    from src.content_fetcher import load_prompt
+    from src.content_fetcher import (
+        ARTICLE_EXTRACT_TOO_SHORT,
+        HTTP_BLOCKED,
+        NETWORK_ERROR,
+        PDF_EXTRACT_FAILED,
+        TLS_ERROR,
+        load_prompt,
+    )
     from src.notebooklm_summarizer import summarize_url as summarize_url_with_notebooklm
     from src.youtube_summarizer import summarize_youtube as summarize_youtube_with_notebooklm
     from src.summarization.common import (
@@ -38,11 +52,11 @@ _MAX_BACKEND_CONCURRENCY = 3
 _FUTURE_TIMEOUT_SECONDS = 600
 
 _ARTICLE_FETCH_FAILURE_REASONS = {
-    "article_extract_too_short",
-    "http_blocked",
-    "network_error",
-    "pdf_extract_failed",
-    "tls_error",
+    ARTICLE_EXTRACT_TOO_SHORT,
+    HTTP_BLOCKED,
+    NETWORK_ERROR,
+    PDF_EXTRACT_FAILED,
+    TLS_ERROR,
 }
 
 
@@ -246,17 +260,17 @@ def summarize_items(
         return (idx, result)
 
     timed_out = False
-    or_pool = ThreadPoolExecutor(max_workers=openrouter_max, thread_name_prefix="openrouter")
-    notebooklm_pool = ThreadPoolExecutor(max_workers=notebooklm_max, thread_name_prefix="notebooklm")
+    or_pool = ThreadPoolExecutor(max_workers=openrouter_max, thread_name_prefix="openrouter") if has_articles else None
+    notebooklm_pool = ThreadPoolExecutor(max_workers=notebooklm_max, thread_name_prefix="notebooklm") if has_notebooklm else None
     try:
         article_futures = [
             (or_pool.submit(_timed_summarize, idx, item, "article"), idx, item)
             for idx, item in article_work
-        ]
+        ] if or_pool else []
         notebooklm_futures = [
             (notebooklm_pool.submit(_timed_summarize, idx, item, work_type), idx, item)
             for idx, item, work_type in notebooklm_work
-        ]
+        ] if notebooklm_pool else []
 
         for future, idx, item in article_futures:
             try:
@@ -284,8 +298,10 @@ def summarize_items(
                     timeout_seconds=_FUTURE_TIMEOUT_SECONDS,
                 )
     finally:
-        or_pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
-        notebooklm_pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
+        if or_pool:
+            or_pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
+        if notebooklm_pool:
+            notebooklm_pool.shutdown(wait=not timed_out, cancel_futures=timed_out)
 
     batch_elapsed = time.monotonic() - batch_start
     ok_count = sum(1 for r in results if r and r.get("status") == "ok")

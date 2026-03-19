@@ -61,9 +61,17 @@ def _resolve_storage_path() -> Tuple[str, bool]:
             ) from exc
 
         fd, storage_path = tempfile.mkstemp(prefix="notebooklm-storage-", suffix=".json")
-        os.fchmod(fd, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(state_content)
+        try:
+            os.fchmod(fd, 0o600)
+            handle = os.fdopen(fd, "w", encoding="utf-8")
+            fd = None  # fdopen took ownership; don't close manually
+            with handle:
+                handle.write(state_content)
+        except Exception:
+            if fd is not None:
+                os.close(fd)
+            Path(storage_path).unlink(missing_ok=True)
+            raise
         return storage_path, True
 
     default = Path.home() / ".notebooklm" / "storage_state.json"

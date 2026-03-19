@@ -1,0 +1,8 @@
+**Title:** The Five Levelsfrom Spicy Autocomplete to the Software Factory  **Key Points**  
+1. **Level 0 – Manual coding:** No AI assistance; every line is written and approved by the developer (e.g., using vi or VS Code without suggestions).  
+2. **Level 1 – Task‑level offload:** AI handles discrete, repetitive chores such as writing unit tests or docstrings; the developer still authors the core logic and sees modest speed‑ups.  
+3. **Level 2 – Pair‑programming with AI:** The AI acts as a junior partner, taking on larger blocks of boilerplate or refactoring work; developers experience flow‑state productivity gains but remain the primary decision‑makers.  
+4. **Level 3 – Managerial oversight:** The AI generates most code; the human’s role shifts to reviewing diffs, managing multiple AI tabs, and ensuring correctness, often feeling like a code‑review manager.  
+5. **Level 4–5 – Spec‑driven automation:** At Level 4 the developer writes specifications and lets the AI implement, test, and iterate autonomously (similar to a PM role); Level 5 represents a fully autonomous “black box” that converts specs directly into software with minimal human intervention, akin to a dark factory.  
+
+**Why It Matters**  Understanding these tiers helps engineering teams gauge where they stand in AI‑augmented development, identify the next productive step (e.g., moving from pair‑programming to spec‑driven automation), and anticipate organizational changes—such as shifting from coding to reviewing, managing, or defining requirements—as AI takes on more of the software creation workload. This framework clarifies the trajectory of AI‑driven productivity gains and the evolving skill set required for software engineers.

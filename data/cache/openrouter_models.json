@@ -1,5 +1,5 @@
 {
-  "fetched_at": 1773820642.6954195,
+  "fetched_at": 1773906731.0636606,
   "models": [
     "google/gemma-3-27b-it:free",
     "qwen/qwen3-next-80b-a3b-instruct:free",
@@ -10,8 +10,6 @@
     "nousresearch/hermes-3-llama-3.1-405b:free",
     "mistralai/mistral-small-3.1-24b-instruct:free",
     "liquid/lfm-2.5-1.2b-instruct:free",
-    "openrouter/hunter-alpha",
-    "openrouter/healer-alpha",
     "nvidia/nemotron-3-super-120b-a12b:free",
     "stepfun/step-3.5-flash:free",
     "nvidia/nemotron-3-nano-30b-a3b:free",

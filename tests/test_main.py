@@ -1,4 +1,7 @@
+import io
+import json
 import unittest
+from contextlib import redirect_stdout
 from datetime import datetime, timezone
 from unittest.mock import patch
 
@@ -243,12 +246,28 @@ class MainEntryPointTests(unittest.TestCase):
             "next_offset": 12,
         }
 
-        main()
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            main()
 
         mock_fetch_urls.assert_not_called()
         mock_summarize_items.assert_not_called()
         mock_generate_digest.assert_not_called()
         mock_send_digest_from_env.assert_not_called()
+
+        lines = stdout.getvalue().splitlines()
+        run_outcome_lines = [line for line in lines if line.startswith("run_outcome:")]
+        run_metrics_lines = [line for line in lines if line.startswith("run_metrics:")]
+
+        self.assertEqual(len(run_outcome_lines), 1)
+        self.assertEqual(len(run_metrics_lines), 1)
+
+        outcome_payload = json.loads(run_outcome_lines[0].split("run_outcome:", 1)[1].strip())
+        metrics_payload = json.loads(run_metrics_lines[0].split("run_metrics:", 1)[1].strip())
+        self.assertEqual(outcome_payload["processed_urls"], 0)
+        self.assertEqual(metrics_payload["metrics_version"], 1)
+        self.assertEqual(metrics_payload["processed_urls"], 0)
+        self.assertIsNone(metrics_payload["seconds_per_processed_url"])
 
 
 if __name__ == "__main__":

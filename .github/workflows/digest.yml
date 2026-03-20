@@ -73,25 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           uv run python src/main.py | tee /tmp/pipeline.log
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-
-          output_path = os.environ["GITHUB_OUTPUT"]
-          lines = Path("/tmp/pipeline.log").read_text(encoding="utf-8").splitlines()
-          line = next((item for item in lines if item.startswith("run_outcome:")), None)
-          if line is None:
-              raise RuntimeError("pipeline did not emit run_outcome")
-
-          payload = json.loads(line.split("run_outcome:", 1)[1].strip())
-          processed_urls = int(payload.get("processed_urls", 0))
-          digest_created = bool(payload.get("digest_created", False))
-
-          with open(output_path, "a", encoding="utf-8") as file:
-              file.write(f"processed_urls={processed_urls}\n")
-              file.write(f"digest_created={str(digest_created).lower()}\n")
-          PY
+          uv run python scripts/extract_pipeline_outputs.py /tmp/pipeline.log
 
       - name: Commit and push pipeline outputs
         id: persist_outputs
@@ -129,6 +111,11 @@ jobs:
         env:
           PIPELINE_RESULT: ${{ steps.pipeline.outcome }}
           PROCESSED_URLS: ${{ steps.pipeline.outputs.processed_urls || 'unknown' }}
+          PIPELINE_SECONDS: ${{ steps.pipeline.outputs.pipeline_seconds || 'unknown' }}
+          SECONDS_PER_PROCESSED_URL: ${{ steps.pipeline.outputs.seconds_per_processed_url || 'unknown' }}
+          FETCH_OK_ARTICLE_COUNT: ${{ steps.pipeline.outputs.fetch_ok_article_count || 'unknown' }}
+          FETCH_OK_YOUTUBE_COUNT: ${{ steps.pipeline.outputs.fetch_ok_youtube_count || 'unknown' }}
+          FETCH_FAILED_COUNT: ${{ steps.pipeline.outputs.fetch_failed_count || 'unknown' }}
           DIGEST_CREATED: ${{ steps.pipeline.outputs.digest_created || 'unknown' }}
           COMMIT_STATUS: ${{ steps.persist_outputs.outputs.commit_status || 'not_required' }}
         run: |
@@ -137,6 +124,10 @@ jobs:
             echo
             echo "- Pipeline step: ${PIPELINE_RESULT}"
             echo "- Processed URLs: ${PROCESSED_URLS}"
+            echo "- Pipeline seconds: ${PIPELINE_SECONDS}"
+            echo "- Seconds per processed URL: ${SECONDS_PER_PROCESSED_URL}"
+            echo "- Source mix (fetch ok article/youtube): ${FETCH_OK_ARTICLE_COUNT}/${FETCH_OK_YOUTUBE_COUNT}"
+            echo "- Fetch failures: ${FETCH_FAILED_COUNT}"
             echo "- Digest created: ${DIGEST_CREATED}"
             echo "- Output persistence: ${COMMIT_STATUS}"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -91,6 +91,7 @@ class PipelineLogParserTests(unittest.TestCase):
         outputs = extract_pipeline_outputs(log_text)
         self.assertEqual(outputs["processed_urls"], "2")
         self.assertEqual(outputs["digest_created"], "true")
+        self.assertEqual(outputs["digest_date"], "2026-03-20")
         self.assertEqual(outputs["pipeline_seconds"], "64.200")
         self.assertEqual(outputs["seconds_per_processed_url"], "32.100")
         self.assertEqual(outputs["fetch_ok_article_count"], "1")
@@ -106,6 +107,7 @@ class PipelineLogParserTests(unittest.TestCase):
         outputs = extract_pipeline_outputs(log_text)
         self.assertEqual(outputs["processed_urls"], "0")
         self.assertEqual(outputs["digest_created"], "false")
+        self.assertEqual(outputs["digest_date"], "unknown")
         self.assertEqual(outputs["pipeline_seconds"], "unknown")
         self.assertEqual(outputs["seconds_per_processed_url"], "unknown")
 

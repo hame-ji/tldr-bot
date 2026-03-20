@@ -11,6 +11,7 @@ on:
         default: "false"
 
 permissions:
+  actions: read
   contents: write
 
 concurrency:
@@ -110,6 +111,7 @@ jobs:
         if: ${{ always() }}
         env:
           PIPELINE_RESULT: ${{ steps.pipeline.outcome }}
+          DIGEST_DATE: ${{ steps.pipeline.outputs.digest_date || 'unknown' }}
           PROCESSED_URLS: ${{ steps.pipeline.outputs.processed_urls || 'unknown' }}
           PIPELINE_SECONDS: ${{ steps.pipeline.outputs.pipeline_seconds || 'unknown' }}
           SECONDS_PER_PROCESSED_URL: ${{ steps.pipeline.outputs.seconds_per_processed_url || 'unknown' }}
@@ -122,6 +124,7 @@ jobs:
           {
             echo "## Digest run"
             echo
+            echo "- Digest date: ${DIGEST_DATE}"
             echo "- Pipeline step: ${PIPELINE_RESULT}"
             echo "- Processed URLs: ${PROCESSED_URLS}"
             echo "- Pipeline seconds: ${PIPELINE_SECONDS}"
@@ -131,3 +134,15 @@ jobs:
             echo "- Digest created: ${DIGEST_CREATED}"
             echo "- Output persistence: ${COMMIT_STATUS}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Write run history summary
+        if: ${{ always() }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DIGEST_DATE: ${{ steps.pipeline.outputs.digest_date || 'unknown' }}
+          PIPELINE_RESULT: ${{ steps.pipeline.outcome }}
+          PROCESSED_URLS: ${{ steps.pipeline.outputs.processed_urls || 'unknown' }}
+          PIPELINE_SECONDS: ${{ steps.pipeline.outputs.pipeline_seconds || 'unknown' }}
+          SECONDS_PER_PROCESSED_URL: ${{ steps.pipeline.outputs.seconds_per_processed_url || 'unknown' }}
+          FETCH_FAILED_COUNT: ${{ steps.pipeline.outputs.fetch_failed_count || 'unknown' }}
+        run: uv run python scripts/write_run_history_summary.py

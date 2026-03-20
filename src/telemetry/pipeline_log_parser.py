@@ -42,6 +42,7 @@ def extract_pipeline_outputs(log_text: str) -> dict[str, str]:
     outputs: dict[str, str] = {
         "processed_urls": str(processed_urls),
         "digest_created": str(digest_created).lower(),
+        "digest_date": "unknown",
     }
 
     if metrics_payload is None:
@@ -56,6 +57,7 @@ def extract_pipeline_outputs(log_text: str) -> dict[str, str]:
         )
         return outputs
 
+    outputs["digest_date"] = str(metrics_payload.get("digest_date", "unknown"))
     outputs["pipeline_seconds"] = _as_output_float(metrics_payload.get("pipeline_seconds"))
     seconds_per_processed = metrics_payload.get("seconds_per_processed_url")
     outputs["seconds_per_processed_url"] = (

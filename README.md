@@ -86,6 +86,12 @@ uv run python -m unittest discover -s tests -p "test_*.py"
 uv run python src/main.py
 ```
 
+Enable repository hooks once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
 Required environment variables:
 
 - `TELEGRAM_BOT_TOKEN`

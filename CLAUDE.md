@@ -1,44 +1,33 @@
-# tldr-bot - Parent Instructions
+# tldr-bot
 
-This is the parent instruction file. Read this first, then route into child `CLAUDE.md`
-files based on the module paths you touch.
+Serverless Telegram URL digest pipeline. Receives URLs via Telegram bot, summarizes
+articles (OpenRouter / Gemini Flash) and YouTube videos (NotebookLM), assembles a daily
+Markdown digest, delivers it back to Telegram. Runs on GitHub Actions — no server.
 
-## Global Rules
+**Stack:** Python · uv · GitHub Actions · Telegram Bot API · OpenRouter · NotebookLM
+**State:** `state.json` (Telegram offset) · `data/` (digests, sources, failures)
 
-- All non-trivial work must use the GSD framework (`/gsd-*` commands).
-- Keep module-specific instructions in child `CLAUDE.md` files, not here.
-- Parent `CLAUDE.md` is the single source of truth for routing.
-- Update child docs alongside code changes so module guidance stays current.
+## Rules
 
-## Child Discovery Guidance
-
-- Start with this parent file.
-- Resolve child files with the routing manifest below.
-- Use longest-prefix route matching when multiple routes match a file path.
-- If no route matches, only parent rules apply.
-
-## Commit-Time Child Sync Policy
-
-Strict policy applies:
-
+- Non-trivial work goes through GSD (`/gsd-*` commands).
+- Module-specific guidance lives in child `CLAUDE.md` files, not here.
+- The routing manifest below is an exception: it must live in this file because
+  `scripts/validate_claude_sync.py` parses it from here.
+- Resolve children via the routing manifest below (longest-prefix match).
+- Paths not covered by any route below have no required child doc; still follow GSD for
+  non-trivial work.
 - If staged changes touch a routed path, the matched child `CLAUDE.md` must be edited in
-  the same commit.
-- Child docs must include these required review headers:
-  - `Last-Reviewed-Date`
-  - `Last-Reviewed-Commit`
-  - `Review-Note`
-- Pre-commit validation blocks commits that violate this policy.
+  the same commit with updated review headers (`Last-Reviewed-Date`,
+  `Last-Reviewed-Commit` as lowercase hex SHA 7-40 chars, `Review-Note`).
+  Pre-commit hook enforces this.
 
-## GSD References
+## GSD References (lazy-load)
 
-Use lazy loading for GSD internals:
+1. This file
+2. `.planning/GSD-REFERENCE.md` when orchestration detail is needed
+3. `.opencode/get-shit-done/workflows/<slug>.md` or `references/<name>.md` for procedures
 
-1. This `CLAUDE.md`
-2. `.planning/GSD-REFERENCE.md` when additional orchestration detail is needed
-3. `.opencode/get-shit-done/workflows/<command-slug>.md` or
-   `.opencode/get-shit-done/references/<name>.md` for exact procedures
-
-## Routing Manifest (Machine Readable)
+## Routing Manifest
 
 <!-- CLAUDE_ROUTING_MANIFEST_START -->
 ```yaml
@@ -60,9 +49,7 @@ routing_manifest:
 ```
 <!-- CLAUDE_ROUTING_MANIFEST_END -->
 
-## One-Time Local Hook Setup
-
-Configure repo hooks once per clone:
+## Setup
 
 ```bash
 git config core.hooksPath .githooks

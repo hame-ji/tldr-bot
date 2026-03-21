@@ -1,17 +1,17 @@
+from __future__ import annotations
+
 import json
 import random
 import re
 import threading
 import time
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import requests
 
-try:
-    from content_fetcher import load_prompt
-except ImportError:
-    from src.content_fetcher import load_prompt
+from src._config import OpenRouterConfig
+from src._prompts import load_prompt
 
 
 class _RetryingSummarizerBase:
@@ -24,6 +24,7 @@ class _RetryingSummarizerBase:
         max_backoff_seconds: float,
     ) -> None:
         self.prompt_path = prompt_path
+        self._cached_prompt: str | None = None
         self.min_spacing_seconds = min_spacing_seconds
         self.max_retries = max_retries
         self.initial_backoff_seconds = initial_backoff_seconds
@@ -44,7 +45,7 @@ class _RetryingSummarizerBase:
         text = str(error).lower()
         return ("429" in text) or ("rate" in text and "limit" in text)
 
-    def _extract_retry_after(self, error: Exception) -> Optional[float]:
+    def _extract_retry_after(self, error: Exception) -> float | None:
         text = str(error)
 
         retry_after_match = re.search(r"retry[-_ ]after\s*[:=]\s*(\d+)", text, flags=re.IGNORECASE)
@@ -66,15 +67,14 @@ class _RetryingSummarizerBase:
         jitter = random.uniform(0.0, 1.0)
         return min(exp + jitter, self.max_backoff_seconds)
 
-    def _load_prompt(self) -> str:
-        return load_prompt(self.prompt_path)
-
     def _generate_once(self, prompt: str, contents: list[str]) -> str:
         raise NotImplementedError
 
     def _generate_with_retry(self, contents: list[str], error_prefix: str) -> str:
-        prompt = self._load_prompt()
-        last_error: Optional[Exception] = None
+        if self._cached_prompt is None:
+            self._cached_prompt = load_prompt(self.prompt_path)
+        prompt = self._cached_prompt
+        last_error: Exception | None = None
 
         for attempt in range(self.max_retries):
             try:
@@ -229,7 +229,7 @@ class OpenRouterSummarizer(_RetryingSummarizerBase):
         api_key: str,
         prompt_path: str = "prompts/summarize.txt",
         base_url: str = "https://openrouter.ai/api/v1",
-        preferred_models: Optional[list[str]] = None,
+        preferred_models: list[str] | None = None,
         models_cache_path: str = "data/cache/openrouter_models.json",
         models_cache_ttl_seconds: int = 21600,
         min_spacing_seconds: float = 1.0,
@@ -242,7 +242,7 @@ class OpenRouterSummarizer(_RetryingSummarizerBase):
         self.preferred_models = preferred_models or []
         self.models_cache_path = models_cache_path
         self.models_cache_ttl_seconds = models_cache_ttl_seconds
-        self._ordered_models: Optional[list[str]] = None
+        self._ordered_models: list[str] | None = None
         self._models_lock = threading.Lock()
         super().__init__(
             prompt_path=prompt_path,
@@ -250,6 +250,20 @@ class OpenRouterSummarizer(_RetryingSummarizerBase):
             max_retries=max_retries,
             initial_backoff_seconds=initial_backoff_seconds,
             max_backoff_seconds=max_backoff_seconds,
+        )
+
+    @classmethod
+    def from_config(cls, config: OpenRouterConfig) -> OpenRouterSummarizer:
+        return cls(
+            api_key=config.api_key,
+            base_url=config.base_url,
+            preferred_models=config.preferred_models,
+            min_spacing_seconds=config.min_spacing_seconds,
+            max_retries=config.max_retries,
+            initial_backoff_seconds=config.initial_backoff_seconds,
+            max_backoff_seconds=config.max_backoff_seconds,
+            models_cache_path=config.models_cache_path,
+            models_cache_ttl_seconds=config.models_cache_ttl_seconds,
         )
 
     def _discover_free_models(self) -> list[str]:
@@ -290,7 +304,7 @@ class OpenRouterSummarizer(_RetryingSummarizerBase):
 
     def _generate_once(self, prompt: str, contents: list[str]) -> str:
         user_content = "\n\n".join(contents)
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         for model_name in self._models():
             try:

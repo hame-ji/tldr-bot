@@ -1,10 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 import os
 import tempfile
 from pathlib import Path
-from typing import Tuple
 
 try:
     from notebooklm import NotebookLMClient
@@ -36,6 +37,10 @@ NOTEBOOKLM_AUTH_EXPIRED = "notebooklm_auth_expired"
 NOTEBOOKLM_SOURCE_FAILED = "notebooklm_source_failed"
 NOTEBOOKLM_SUMMARY_FAILED = "notebooklm_summary_failed"
 
+YOUTUBE_AUTH_EXPIRED = "youtube_auth_expired"
+YOUTUBE_SOURCE_FAILED = "youtube_source_failed"
+YOUTUBE_SUMMARY_FAILED = "youtube_summary_failed"
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -45,7 +50,29 @@ class NotebookLMSummaryError(RuntimeError):
         super().__init__(reason if not message else f"{reason}: {message}")
 
 
-def _resolve_storage_path() -> Tuple[str, bool]:
+class YouTubeSummaryError(RuntimeError):
+    def __init__(self, reason: str, message: str = "") -> None:
+        self.reason = reason
+        super().__init__(reason if not message else f"{reason}: {message}")
+
+
+_YOUTUBE_REASON_MAP = {
+    NOTEBOOKLM_AUTH_EXPIRED: YOUTUBE_AUTH_EXPIRED,
+    NOTEBOOKLM_SOURCE_FAILED: YOUTUBE_SOURCE_FAILED,
+    NOTEBOOKLM_SUMMARY_FAILED: YOUTUBE_SUMMARY_FAILED,
+}
+
+
+def _reraise_as_youtube_error(exc: NotebookLMSummaryError) -> None:
+    mapped_reason = _YOUTUBE_REASON_MAP.get(exc.reason, YOUTUBE_SUMMARY_FAILED)
+    message = str(exc)
+    prefix = exc.reason + ": "
+    if message.startswith(prefix):
+        message = message[len(prefix):]
+    raise YouTubeSummaryError(mapped_reason, message) from exc
+
+
+def _resolve_storage_path() -> tuple[str, bool]:
     explicit_path = os.environ.get("NOTEBOOKLM_STORAGE_PATH")
     if explicit_path and Path(explicit_path).exists():
         return explicit_path, False
@@ -122,3 +149,10 @@ async def _summarize_url_async(url: str, prompt: str) -> str:
                 Path(storage_path).unlink(missing_ok=True)
             except OSError as exc:
                 LOGGER.warning("Failed to remove temporary NotebookLM storage state %s: %s", storage_path, exc)
+
+
+def summarize_youtube(url: str, prompt: str) -> str:
+    try:
+        return summarize_url(url=url, prompt=prompt)
+    except NotebookLMSummaryError as exc:
+        _reraise_as_youtube_error(exc)

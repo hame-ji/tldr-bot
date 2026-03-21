@@ -2,10 +2,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-try:
-    from content_fetcher import load_prompt
-except ImportError:
-    from src.content_fetcher import load_prompt
+from src._prompts import load_prompt
 
 
 def _render_digest(

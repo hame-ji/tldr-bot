@@ -1,23 +1,34 @@
+from __future__ import annotations
+
 import json
 import time
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
-try:
-    from content_fetcher import fetch_urls
-    from digest_generator import generate_digest
-    from summarizer import summarize_items
-    from telegram_client import poll_urls_from_env, send_digest_from_env
-    from telemetry.run_metrics import build_run_metrics, to_log_line
-except ImportError:
-    from src.content_fetcher import fetch_urls
-    from src.digest_generator import generate_digest
-    from src.summarizer import summarize_items
-    from src.telegram_client import poll_urls_from_env, send_digest_from_env
-    from src.telemetry.run_metrics import build_run_metrics, to_log_line
+from src._types import PipelineOutcome
+from src.content_fetcher import fetch_urls
+from src.digest_generator import generate_digest
+from src.summarizer import summarize_items
+from src.telegram_client import poll_urls_from_env, send_digest_from_env
+from src.telemetry.run_metrics import build_run_metrics, to_log_line
+
+_SUMMARIZABLE_KINDS = {"article", "youtube"}
 
 
-def _run_pipeline_with_context(now: Optional[datetime] = None) -> tuple[dict[str, Any], list[dict[str, Any]], float, str]:
+def _empty_outcome(**overrides: Any) -> PipelineOutcome:
+    base: PipelineOutcome = {
+        "processed_urls": 0,
+        "summary_ok_count": 0,
+        "summary_failed_count": 0,
+        "digest_created": False,
+        "digest_path": "",
+        "digest_sent_chunks": 0,
+    }
+    base.update(overrides)  # type: ignore[typeddict-item]
+    return base
+
+
+def _run_pipeline_with_context(now: datetime | None = None) -> tuple[PipelineOutcome, list[dict[str, Any]], float, str]:
     pipeline_start = time.monotonic()
     now_utc = now or datetime.now(timezone.utc)
     run_date = now_utc.date()
@@ -30,15 +41,7 @@ def _run_pipeline_with_context(now: Optional[datetime] = None) -> tuple[dict[str
 
     if len(result["urls"]) == 0:
         print("no_urls_processed; skipping digest generation and delivery")
-        outcome = {
-            "processed_urls": 0,
-            "summary_ok_count": 0,
-            "summary_failed_count": 0,
-            "digest_created": False,
-            "digest_path": "",
-            "digest_sent_chunks": 0,
-        }
-        return outcome, fetch_results, time.monotonic() - pipeline_start, run_date.isoformat()
+        return _empty_outcome(), fetch_results, time.monotonic() - pipeline_start, run_date.isoformat()
 
     fetch_results = fetch_urls(result["urls"])
     for item in fetch_results:
@@ -49,19 +52,10 @@ def _run_pipeline_with_context(now: Optional[datetime] = None) -> tuple[dict[str
         else:
             print(f"failed:{item['url']} -> {item['failure_path']}")
 
-    summarizable_kinds = {"article", "youtube"}
-    processable_items = [item for item in fetch_results if item.get("kind") in summarizable_kinds]
+    processable_items = [item for item in fetch_results if item.get("kind") in _SUMMARIZABLE_KINDS]
     if len(processable_items) == 0:
         print("no_summarizable_urls_processed; skipping digest generation and delivery")
-        outcome = {
-            "processed_urls": 0,
-            "summary_ok_count": 0,
-            "summary_failed_count": 0,
-            "digest_created": False,
-            "digest_path": "",
-            "digest_sent_chunks": 0,
-        }
-        return outcome, fetch_results, time.monotonic() - pipeline_start, run_date.isoformat()
+        return _empty_outcome(), fetch_results, time.monotonic() - pipeline_start, run_date.isoformat()
 
     summarized = summarize_items(fetch_results, run_date=run_date)
     for item in summarized:
@@ -79,24 +73,20 @@ def _run_pipeline_with_context(now: Optional[datetime] = None) -> tuple[dict[str
     send_responses = send_digest_from_env(digest["digest_text"])
     print(f"digest_sent_chunks:{len(send_responses)}")
 
-    summary_ok_count = len(
-        [item for item in summarized if item.get("status") == "ok" and item.get("kind") in summarizable_kinds]
+    summary_ok_count = sum(1 for item in summarized if item.get("status") == "ok" and item.get("kind") in _SUMMARIZABLE_KINDS)
+    summary_failed_count = sum(1 for item in summarized if item.get("status") == "failed" and item.get("kind") in _SUMMARIZABLE_KINDS)
+    outcome = _empty_outcome(
+        processed_urls=summary_ok_count + summary_failed_count,
+        summary_ok_count=summary_ok_count,
+        summary_failed_count=summary_failed_count,
+        digest_created=True,
+        digest_path=digest["digest_path"],
+        digest_sent_chunks=len(send_responses),
     )
-    summary_failed_count = len(
-        [item for item in summarized if item.get("status") == "failed" and item.get("kind") in summarizable_kinds]
-    )
-    outcome = {
-        "processed_urls": summary_ok_count + summary_failed_count,
-        "summary_ok_count": summary_ok_count,
-        "summary_failed_count": summary_failed_count,
-        "digest_created": True,
-        "digest_path": digest["digest_path"],
-        "digest_sent_chunks": len(send_responses),
-    }
     return outcome, fetch_results, time.monotonic() - pipeline_start, run_date.isoformat()
 
 
-def run_pipeline(now: Optional[datetime] = None) -> dict[str, Any]:
+def run_pipeline(now: datetime | None = None) -> dict[str, Any]:
     outcome, _, _, _ = _run_pipeline_with_context(now=now)
     return outcome
 

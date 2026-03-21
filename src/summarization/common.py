@@ -1,11 +1,11 @@
+from __future__ import annotations
+
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Protocol
 
-try:
-    from content_fetcher import url_to_slug, write_failure_record
-except ImportError:
-    from src.content_fetcher import url_to_slug, write_failure_record
+from src._failures import write_failure_record
+from src._url_utils import url_to_slug
 
 
 class Summarizer(Protocol):
@@ -34,14 +34,14 @@ def _run_summarize(
     run_date: date,
     sources_base_dir: str,
     failed_base_dir: str,
-    fallback_reason: Optional[str] = None,
-) -> Dict[str, Any]:
+    fallback_reason: str | None = None,
+) -> dict[str, Any]:
     try:
         summary = summarize_fn()
     except Exception as exc:  # noqa: BLE001
         reason = getattr(exc, "reason", fallback_reason)
         failure = write_failure_record(url=url, error=str(exc), base_dir=failed_base_dir, reason=reason)
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "status": "failed",
             "kind": kind,
             "url": url,
@@ -63,12 +63,12 @@ def _run_summarize(
 
 
 def summarize_item(
-    item: Dict[str, Any],
+    item: dict[str, Any],
     summarizer: Summarizer,
     run_date: date,
     sources_base_dir: str = "data/sources",
     failed_base_dir: str = "data/failed",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     if item.get("status") != "ok":
         return item
 
@@ -89,12 +89,12 @@ def summarize_item(
 
 
 def summarize_failed_article_item(
-    item: Dict[str, Any],
+    item: dict[str, Any],
     summarizer: Summarizer,
     run_date: date,
     sources_base_dir: str = "data/sources",
     failed_base_dir: str = "data/failed",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     url = item.get("url", "")
     return _run_summarize(
         url=url, kind="article",
@@ -113,10 +113,10 @@ def _clamp_concurrency(raw: str, default: int, max_allowed: int) -> int:
 
 
 def _timeout_result(
-    item: Dict[str, Any],
+    item: dict[str, Any],
     failed_base_dir: str,
     timeout_seconds: int,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     kind = item.get("kind", "unknown")
     url = item.get("url", "")
     error = f"Summarization timed out after {timeout_seconds} seconds"

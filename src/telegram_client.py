@@ -1,9 +1,11 @@
-import json
+from __future__ import annotations
+
 import html
+import json
 import os
 import re
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any
 
 import requests
 
@@ -11,7 +13,7 @@ import requests
 URL_PATTERN = re.compile(r"https?://[^\s<>()\[\]{}\"']+")
 
 
-def load_offset(state_path: Union[str, Path] = "state.json") -> Optional[int]:
+def load_offset(state_path: str | Path = "state.json") -> int | None:
     path = Path(state_path)
     if not path.exists():
         return None
@@ -22,7 +24,7 @@ def load_offset(state_path: Union[str, Path] = "state.json") -> Optional[int]:
     return None
 
 
-def save_offset(offset: int, state_path: Union[str, Path] = "state.json") -> None:
+def save_offset(offset: int, state_path: str | Path = "state.json") -> None:
     path = Path(state_path)
     payload = {"telegram_offset": offset}
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -51,7 +53,7 @@ def _telegram_api(
     return payload
 
 
-def get_updates(bot_token: str, offset: Optional[int]) -> list[dict[str, Any]]:
+def get_updates(bot_token: str, offset: int | None) -> list[dict[str, Any]]:
     params: dict[str, Any] = {"timeout": 0, "limit": 100}
     if offset is not None:
         params["offset"] = offset
@@ -65,7 +67,7 @@ def get_updates(bot_token: str, offset: Optional[int]) -> list[dict[str, Any]]:
 def poll_urls(
     bot_token: str,
     allowed_chat_id: int,
-    state_path: Union[str, Path] = "state.json",
+    state_path: str | Path = "state.json",
 ) -> dict[str, Any]:
     previous_offset = load_offset(state_path)
     updates = get_updates(bot_token, previous_offset)
@@ -98,23 +100,12 @@ def poll_urls(
 
 
 def _telegram_credentials_from_env() -> tuple[str, int]:
-    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id_raw = os.environ.get("TELEGRAM_CHAT_ID")
-
-    if not bot_token:
-        raise RuntimeError("Missing TELEGRAM_BOT_TOKEN environment variable")
-    if not chat_id_raw:
-        raise RuntimeError("Missing TELEGRAM_CHAT_ID environment variable")
-
-    try:
-        chat_id = int(chat_id_raw)
-    except ValueError as exc:
-        raise RuntimeError("TELEGRAM_CHAT_ID must be an integer") from exc
-
-    return bot_token, chat_id
+    from src._config import telegram_config_from_env
+    config = telegram_config_from_env()
+    return config.bot_token, config.chat_id
 
 
-def poll_urls_from_env(state_path: Union[str, Path] = "state.json") -> dict[str, Any]:
+def poll_urls_from_env(state_path: str | Path = "state.json") -> dict[str, Any]:
     bot_token, allowed_chat_id = _telegram_credentials_from_env()
     return poll_urls(bot_token=bot_token, allowed_chat_id=allowed_chat_id, state_path=state_path)
 

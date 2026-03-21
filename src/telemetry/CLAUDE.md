@@ -1,26 +1,13 @@
-# src/telemetry - Telemetry Module Instructions
+# src/telemetry/
 
 Last-Reviewed-Date: 2026-03-21
-Last-Reviewed-Commit: HEAD
-Review-Note: Initial child CLAUDE split from parent.
+Last-Reviewed-Commit: 1ee4e95
+Review-Note: Polish: headers refreshed with parent CLAUDE.md amend.
 
-## Scope
-
-Applies to all files under `src/telemetry/`.
-
-## Module Intent
-
-- Preserve the telemetry contract consumed by CI log parsing and run history reporting.
-- Keep telemetry output machine-readable and backward compatible where possible.
-- Keep parsing/reporting resilient to malformed or partial historical data.
-
-## Implementation Rules
-
-- Prefer explicit schemas and strict key naming for emitted metrics.
-- Keep parser behavior tolerant on input but explicit on output defaults.
-- Isolate network access to dedicated clients; keep report rendering pure.
-
-## Test Expectations
-
-- Add regression tests for metrics parsing, fallback behavior, and run-history table
-  rendering when telemetry contract or parser logic changes.
+- `run_metrics.py`: frozen `RunMetrics` dataclass emitted as `run_metrics:` JSON log line. `metrics_version=1`.
+- `pipeline_log_parser.py`: extracts `run_outcome:` and `run_metrics:` from pipeline stdout. Tolerant on missing metrics (fills "unknown"). Used by CI to set workflow outputs.
+- `run_history/`: fetches past workflow run logs via GitHub API, parses metrics from zipped logs, renders Markdown performance summary table.
+- Metric keys are the contract. Renaming or removing a key breaks CI parsing. Add new keys, don't rename old ones.
+- Parser must handle malformed/missing data gracefully (return "unknown", not crash).
+- Keep `report.py` rendering pure (no network). Network stays in `github_client.py`.
+- Test metrics parsing, fallback defaults, and table rendering when contracts change.

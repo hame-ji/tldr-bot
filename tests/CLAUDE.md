@@ -1,26 +1,12 @@
-# tests - Test Suite Instructions
+# tests/
 
 Last-Reviewed-Date: 2026-03-21
-Last-Reviewed-Commit: HEAD
-Review-Note: Initial child CLAUDE split from parent.
+Last-Reviewed-Commit: 1ee4e95
+Review-Note: Polish: headers refreshed with parent CLAUDE.md amend.
 
-## Scope
-
-Applies to all files under `tests/`.
-
-## Module Intent
-
-- Keep tests behavior-focused and deterministic.
-- Prefer small fixtures and explicit assertions over broad snapshot coverage.
-- Protect key pipeline invariants: failure isolation, output contracts, and parsing.
-
-## Implementation Rules
-
-- Add targeted tests for each behavior change in runtime, telemetry, or workflow scripts.
-- Avoid test coupling to unstable formatting unless formatting is the contract.
-- Keep mock boundaries at external I/O (network, filesystem side effects, environment).
-
-## Test Expectations
-
-- New logic in `src/`, `scripts/`, or workflow parsing paths must include regression
-  coverage in the relevant test module.
+- Framework: `unittest` with `unittest.mock`. No pytest.
+- Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.
+- Tests are behavior-focused: assert on status dicts, counts, routing decisions — not formatting.
+- Thread safety matters: `test_summarizer.py` verifies spacing locks, cache init races, and failure isolation under concurrency. Preserve these.
+- Each module has a dedicated test file. New logic needs regression coverage in the matching file.
+- Don't couple tests to unstable formatting unless formatting IS the contract (e.g. digest template).

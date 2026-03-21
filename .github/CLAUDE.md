@@ -1,29 +1,12 @@
-# .github and scripts - CI/Workflow Instructions
+# .github/ and scripts/
 
 Last-Reviewed-Date: 2026-03-21
-Last-Reviewed-Commit: HEAD
-Review-Note: Initial child CLAUDE split from parent.
+Last-Reviewed-Commit: 1ee4e95
+Review-Note: Polish: headers refreshed with parent CLAUDE.md amend.
 
-## Scope
-
-Applies to:
-
-- `.github/workflows/`
-- `scripts/` used by CI/workflow jobs
-
-## Module Intent
-
-- Keep GitHub Actions workflows reproducible and failure-diagnosable.
-- Keep helper scripts deterministic and safe for CI execution.
-- Preserve pipeline observability and summary reporting behavior.
-
-## Implementation Rules
-
-- Keep secrets handling explicit and minimal in workflows.
-- Keep scripts robust to missing/unknown telemetry values.
-- Preserve existing workflow entrypoints and output variable contracts.
-
-## Test Expectations
-
-- Add or update tests when workflow-facing scripts change behavior, outputs, or
-  parsing contracts used by workflow steps.
+- `ci.yml`: runs `unittest discover` on push/PR. Python 3.11 + uv. No secrets needed.
+- `digest.yml`: daily 7am UTC cron + manual trigger. Validates Telegram creds, runs pipeline, parses `run_outcome:`/`run_metrics:` from stdout, conditionally commits artifacts.
+- `scripts/validate_claude_sync.py`: pre-commit hook. Ensures child CLAUDE.md files are co-staged with routed code changes and have updated review headers.
+- Secrets handling: explicit and minimal. Don't scatter secrets across steps.
+- Workflow output variable names are a contract (consumed by downstream steps). Don't rename without updating consumers.
+- Test script behavior changes; hook validation has its own test module (`tests/test_validate_claude_sync.py`).

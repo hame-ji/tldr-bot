@@ -17,7 +17,7 @@ from src.summarizer import (
     summarize_item,
     summarize_items,
 )
-from src.youtube_summarizer import YOUTUBE_AUTH_EXPIRED, YOUTUBE_SOURCE_FAILED, YouTubeSummaryError
+from src.summarization.notebooklm_backend import YOUTUBE_AUTH_EXPIRED, YOUTUBE_SOURCE_FAILED, YouTubeSummaryError
 
 
 @contextlib.contextmanager
@@ -117,7 +117,7 @@ class SummarizerTests(unittest.TestCase):
     @patch("src.summarizer.OpenRouterSummarizer")
     def test_summarize_items_uses_openrouter_env(self, mock_cls) -> None:
         fake = _FakeSummarizer()
-        mock_cls.return_value = fake
+        mock_cls.from_config.return_value =  fake
 
         with tempfile.TemporaryDirectory() as tmpdir:
             env = {
@@ -141,17 +141,17 @@ class SummarizerTests(unittest.TestCase):
 
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0]["status"], "ok")
-            mock_cls.assert_called_once_with(
-                api_key="openrouter-key",
-                base_url="https://openrouter.ai/api/v1",
-                preferred_models=["model/a:free", "model/b:free"],
-                min_spacing_seconds=2.0,
-                max_retries=7,
-                initial_backoff_seconds=6.0,
-                max_backoff_seconds=90.0,
-                models_cache_path=str(Path(tmpdir) / "models.json"),
-                models_cache_ttl_seconds=123,
-            )
+            mock_cls.from_config.assert_called_once()
+            config = mock_cls.from_config.call_args[0][0]
+            self.assertEqual(config.api_key, "openrouter-key")
+            self.assertEqual(config.base_url, "https://openrouter.ai/api/v1")
+            self.assertEqual(config.preferred_models, ["model/a:free", "model/b:free"])
+            self.assertAlmostEqual(config.min_spacing_seconds, 2.0)
+            self.assertEqual(config.max_retries, 7)
+            self.assertAlmostEqual(config.initial_backoff_seconds, 6.0)
+            self.assertAlmostEqual(config.max_backoff_seconds, 90.0)
+            self.assertEqual(config.models_cache_path, str(Path(tmpdir) / "models.json"))
+            self.assertEqual(config.models_cache_ttl_seconds, 123)
 
     def test_order_models_prefers_user_picks_then_quality(self) -> None:
         models = [
@@ -173,7 +173,7 @@ class SummarizerTests(unittest.TestCase):
             def summarize_article(self, url: str, content: str) -> str:
                 return "article via openrouter"
 
-        mock_openrouter_cls.return_value = _ArticleOnly()
+        mock_openrouter_cls.from_config.return_value = _ArticleOnly()
         mock_summarize_youtube.return_value = "youtube via notebooklm"
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -193,7 +193,7 @@ class SummarizerTests(unittest.TestCase):
             self.assertEqual(results[0]["kind"], "article")
             self.assertEqual(results[1]["status"], "ok")
             self.assertEqual(results[1]["kind"], "youtube")
-            mock_openrouter_cls.assert_called_once()
+            mock_openrouter_cls.from_config.assert_called_once()
             mock_summarize_youtube.assert_called_once_with(url="https://youtu.be/abc", prompt=ANY)
 
     @patch("src.summarizer.summarize_youtube_with_notebooklm")
@@ -303,7 +303,7 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
     def test_default_sequential_single_article(self, mock_cls) -> None:
         """With default concurrency (1,1), a single article should still work."""
         fake = _FakeSummarizer()
-        mock_cls.return_value = fake
+        mock_cls.from_config.return_value = fake
 
         with tempfile.TemporaryDirectory() as tmpdir, _override_env({"OPENROUTER_API_KEY": "key"}):
             results = summarize_items(
@@ -332,7 +332,7 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
                     call_log.append(("article", start))
                 return "article summary"
 
-        mock_cls.return_value = _SlowArticle()
+        mock_cls.from_config.return_value = _SlowArticle()
 
         def slow_youtube(url: str, prompt: str) -> str:
             start = time.monotonic()
@@ -381,7 +381,7 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
             def summarize_article(self, url: str, content: str) -> str:
                 return "article:" + url
 
-        mock_cls.return_value = _ArticleOnly()
+        mock_cls.from_config.return_value = _ArticleOnly()
         mock_yt.return_value = "youtube summary"
 
         env_vars = {
@@ -425,7 +425,7 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
             def summarize_article(self, url: str, content: str) -> str:
                 return "article ok"
 
-        mock_cls.return_value = _WorkingArticle()
+        mock_cls.from_config.return_value = _WorkingArticle()
         mock_yt.side_effect = RuntimeError("notebooklm crashed")
 
         with tempfile.TemporaryDirectory() as tmpdir, _override_env({"OPENROUTER_API_KEY": "key"}):
@@ -454,7 +454,7 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
             def summarize_article(self, url: str, content: str) -> str:
                 raise RuntimeError("openrouter crashed")
 
-        mock_cls.return_value = _BrokenArticle()
+        mock_cls.from_config.return_value = _BrokenArticle()
         mock_yt.return_value = "youtube ok"
 
         with tempfile.TemporaryDirectory() as tmpdir, _override_env({"OPENROUTER_API_KEY": "key"}):
@@ -563,7 +563,7 @@ class SummarizeItemsTimeoutTests(unittest.TestCase):
     @patch("src.summarizer.summarize_item")
     @patch("src.summarizer.OpenRouterSummarizer")
     def test_timeout_isolated_to_single_item(self, mock_cls, mock_summarize_item) -> None:
-        mock_cls.return_value = _FakeSummarizer()
+        mock_cls.from_config.return_value = _FakeSummarizer()
 
         def summarize_side_effect(item, summarizer, run_date, sources_base_dir="data/sources", failed_base_dir="data/failed"):
             if item["url"].endswith("/slow"):

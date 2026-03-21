@@ -73,7 +73,7 @@ jobs:
         id: pipeline
         run: |
           set -euo pipefail
-          uv run python src/main.py | tee /tmp/pipeline.log
+          uv run python -m src | tee /tmp/pipeline.log
           uv run python scripts/extract_pipeline_outputs.py /tmp/pipeline.log
 
       - name: Commit and push pipeline outputs

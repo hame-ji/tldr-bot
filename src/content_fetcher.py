@@ -1,13 +1,12 @@
-from datetime import datetime, timezone
-import hashlib
+from __future__ import annotations
+
 from io import BytesIO
-from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
-from urllib.parse import parse_qs, urlparse, urlsplit, urlunsplit
+from collections.abc import Iterable
+from typing import Any
+from urllib.parse import urlparse
 
 import requests
 from requests import exceptions as requests_exceptions
-from slugify import slugify
 
 try:
     import trafilatura
@@ -28,14 +27,40 @@ except ImportError:
 
     PdfReader = _PdfReaderFallback
 
+from src._failures import (  # noqa: E402
+    ARTICLE_EXTRACT_TOO_SHORT,
+    HTTP_BLOCKED,
+    NETWORK_ERROR,
+    PDF_EXTRACT_FAILED,
+    TLS_ERROR,
+    write_failure_record,
+)
+from src._prompts import load_prompt  # noqa: E402
+from src._url_utils import (  # noqa: E402
+    YOUTUBE_HOSTS,
+    classify_url,
+    normalize_url_for_fetch,
+    url_to_slug,
+)
 
-YOUTUBE_HOSTS = {
-    "youtube.com",
-    "www.youtube.com",
-    "m.youtube.com",
-    "youtu.be",
-    "www.youtu.be",
-}
+# Re-export for backward compatibility
+__all__ = [
+    "ARTICLE_EXTRACT_TOO_SHORT",
+    "HTTP_BLOCKED",
+    "NETWORK_ERROR",
+    "PDF_EXTRACT_FAILED",
+    "TLS_ERROR",
+    "FetchProcessingError",
+    "YOUTUBE_HOSTS",
+    "classify_url",
+    "fetch_article_text",
+    "fetch_url",
+    "fetch_urls",
+    "load_prompt",
+    "normalize_url_for_fetch",
+    "url_to_slug",
+    "write_failure_record",
+]
 
 REQUEST_HEADERS = {
     "User-Agent": (
@@ -47,57 +72,11 @@ REQUEST_HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
-HTTP_BLOCKED = "http_blocked"
-TLS_ERROR = "tls_error"
-PDF_EXTRACT_FAILED = "pdf_extract_failed"
-ARTICLE_EXTRACT_TOO_SHORT = "article_extract_too_short"
-NETWORK_ERROR = "network_error"
-
 
 class FetchProcessingError(RuntimeError):
     def __init__(self, reason: str, message: str) -> None:
         self.reason = reason
         super().__init__(message)
-
-
-def url_to_slug(url: str, fallback: str = "url") -> str:
-    parsed = urlparse(url)
-    slug_seed = (parsed.netloc + parsed.path).strip("/") or fallback
-
-    host = (parsed.hostname or "").lower()
-    if host in YOUTUBE_HOSTS:
-        query = parse_qs(parsed.query)
-        if host.endswith("youtu.be"):
-            video_id = parsed.path.strip("/")
-        else:
-            video_id = (query.get("v") or [""])[0]
-
-        if video_id:
-            slug_seed = f"{slug_seed}-{video_id}"
-        else:
-            digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:10]
-            slug_seed = f"{slug_seed}-{digest}"
-
-    return slugify(slug_seed)[:80] or fallback
-
-
-def load_prompt(path: str) -> str:
-    try:
-        return Path(path).read_text(encoding="utf-8").strip()
-    except FileNotFoundError:
-        raise RuntimeError("Missing prompt file: " + path) from None
-
-
-def classify_url(url: str) -> str:
-    host = (urlparse(url).hostname or "").lower()
-    if host in YOUTUBE_HOSTS:
-        return "youtube"
-    return "article"
-
-
-def normalize_url_for_fetch(url: str) -> str:
-    parts = urlsplit(url)
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, parts.query, ""))
 
 
 def _is_pdf_response(url: str, content_type: str) -> bool:
@@ -168,42 +147,7 @@ def _classify_fetch_error(exc: Exception) -> str:
     return NETWORK_ERROR
 
 
-def write_failure_record(
-    url: str,
-    error: str,
-    base_dir: str = "data/failed",
-    now: Optional[datetime] = None,
-    reason: Optional[str] = None,
-) -> Path:
-    timestamp = now or datetime.now(timezone.utc)
-    day = timestamp.strftime("%Y-%m-%d")
-    stamp = timestamp.isoformat()
-
-    slug = url_to_slug(url)
-
-    out_dir = Path(base_dir) / day
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / (slug + ".md")
-
-    lines = [
-        "# Fetch Failure",
-        "",
-        "- URL: " + url,
-        "- Timestamp: " + stamp,
-    ]
-    if reason:
-        lines.append("- Reason: " + reason)
-    lines.extend(
-        [
-            "- Error: " + error,
-            "",
-        ]
-    )
-    out_path.write_text("\n".join(lines), encoding="utf-8")
-    return out_path
-
-
-def fetch_url(url: str, failed_base_dir: str = "data/failed") -> Dict[str, Any]:
+def fetch_url(url: str, failed_base_dir: str = "data/failed") -> dict[str, Any]:
     kind = classify_url(url)
     if kind == "youtube":
         return {"status": "ok", "kind": "youtube", "url": url}
@@ -225,8 +169,8 @@ def fetch_url(url: str, failed_base_dir: str = "data/failed") -> Dict[str, Any]:
     return {"status": "ok", "kind": "article", "url": url, "content": content}
 
 
-def fetch_urls(urls: Iterable[str], failed_base_dir: str = "data/failed") -> List[Dict[str, Any]]:
-    results: List[Dict[str, Any]] = []
+def fetch_urls(urls: Iterable[str], failed_base_dir: str = "data/failed") -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
     for url in urls:
         results.append(fetch_url(url, failed_base_dir=failed_base_dir))
     return results

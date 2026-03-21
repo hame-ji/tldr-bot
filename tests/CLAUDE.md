@@ -1,8 +1,8 @@
 # tests/
 
-Last-Reviewed-Date: 2026-03-21
-Last-Reviewed-Commit: 1ee4e95
-Review-Note: Polish: headers refreshed with parent CLAUDE.md amend.
+Last-Reviewed-Date: 2026-03-22
+Last-Reviewed-Commit: 84f978d
+Review-Note: Simplify: updated mocks for from_config classmethod; fixed spacing in mock assignments.
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

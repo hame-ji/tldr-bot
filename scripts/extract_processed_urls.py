@@ -1,9 +1,25 @@
 from __future__ import annotations
 
+import json
 import sys
+from typing import Any
 from pathlib import Path
 
-from src.telemetry.pipeline_log_parser import extract_pipeline_outputs
+
+def _extract_payload(log_text: str, prefix: str) -> dict[str, Any] | None:
+    payload_line = None
+    for line in log_text.splitlines():
+        if line.startswith(prefix):
+            payload_line = line
+
+    if payload_line is None:
+        return None
+
+    raw_payload = payload_line.split(prefix, 1)[1].strip()
+    try:
+        return json.loads(raw_payload)
+    except json.JSONDecodeError:
+        return None
 
 
 def main() -> None:
@@ -18,15 +34,21 @@ def main() -> None:
         raise SystemExit(1)
 
     try:
-        outputs = extract_pipeline_outputs(log_text)
+        outcome_payload = _extract_payload(log_text, "run_outcome:")
+        if outcome_payload is None:
+            raise RuntimeError("pipeline did not emit run_outcome")
+        processed_urls = int(outcome_payload.get("processed_urls", 0))
     except RuntimeError as exc:
         print(f"invalid pipeline log contract: {exc}", file=sys.stderr)
+        raise SystemExit(1)
+    except (TypeError, ValueError) as exc:
+        print(f"invalid pipeline log contract: invalid processed_urls in run_outcome ({exc})", file=sys.stderr)
         raise SystemExit(1)
     except Exception as exc:  # noqa: BLE001
         print(f"failed to parse pipeline log: {exc.__class__.__name__}: {exc}", file=sys.stderr)
         raise SystemExit(1)
 
-    print(outputs["processed_urls"])
+    print(processed_urls)
 
 
 if __name__ == "__main__":

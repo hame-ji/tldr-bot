@@ -97,17 +97,7 @@ class ScriptEntrypointTests(unittest.TestCase):
             log_path.write_text(log_text, encoding="utf-8")
 
             result = subprocess.run(
-                [
-                    sys.executable,
-                    "-c",
-                    (
-                        "from pathlib import Path; "
-                        "from src.telemetry.pipeline_log_parser import extract_pipeline_outputs; "
-                        "import sys; "
-                        "print(extract_pipeline_outputs(Path(sys.argv[1]).read_text(encoding='utf-8'))['processed_urls'])"
-                    ),
-                    str(log_path),
-                ],
+                [sys.executable, "-m", "scripts.extract_processed_urls", str(log_path)],
                 cwd=REPO_ROOT,
                 capture_output=True,
                 text=True,
@@ -118,6 +108,27 @@ class ScriptEntrypointTests(unittest.TestCase):
             processed_urls = result.stdout.strip()
             commit_status = "skipped_empty_day" if processed_urls == "0" else "pushed"
             self.assertEqual(commit_status, "skipped_empty_day")
+
+    def test_extract_processed_urls_module_returns_non_empty_count(self) -> None:
+        log_text = (
+            'run_outcome:{"processed_urls": 3, "summary_ok_count": 2, "summary_failed_count": 1, '
+            '"digest_created": true, "digest_path": "data/digests/2026-03-22.md", "digest_sent_chunks": 2}'
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "pipeline.log"
+            log_path.write_text(log_text, encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, "-m", "scripts.extract_processed_urls", str(log_path)],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
+            self.assertEqual(result.stdout.strip(), "3")
 
 
 if __name__ == "__main__":

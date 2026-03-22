@@ -87,6 +87,22 @@ jobs:
         run: |
           set -euo pipefail
 
+          PROCESSED_URLS="$(
+            uv run python - <<'PY'
+from pathlib import Path
+from src.telemetry.pipeline_log_parser import extract_pipeline_outputs
+
+log_text = Path("/tmp/pipeline.log").read_text(encoding="utf-8")
+outputs = extract_pipeline_outputs(log_text)
+print(outputs["processed_urls"])
+PY
+          )"
+          if [ "${PROCESSED_URLS}" = "0" ]; then
+            echo "No processed URLs; skipping commit/push for empty day"
+            echo "commit_status=skipped_empty_day" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           TODAY_UTC=$(date -u +%F)
           DAILY_SUBJECT="chore(digest): ${TODAY_UTC} daily digest"
 

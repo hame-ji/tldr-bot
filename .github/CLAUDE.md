@@ -1,8 +1,8 @@
 # .github/ and scripts/
 
 Last-Reviewed-Date: 2026-03-22
-Last-Reviewed-Commit: 1644459
-Review-Note: Moved processed_urls extraction into a dedicated scripts module to keep digest workflow commit gate concise.
+Last-Reviewed-Commit: f6d753a
+Review-Note: Added explicit error diagnostics and fail-fast exits for extract_processed_urls helper failure paths.
 
 - `ci.yml`: runs `unittest discover` on push/PR. Python 3.11 + uv. No secrets needed.
 - `digest.yml`: daily 7am UTC cron + manual trigger. Validates Telegram creds, runs pipeline via `uv run python -m src`, extracts outputs in a separate module step, and treats telemetry/history failures as non-blocking while skipping empty-day commits.

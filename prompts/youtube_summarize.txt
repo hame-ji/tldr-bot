@@ -1,10 +1,26 @@
-Summarize this YouTube source for a practical daily digest.
+Summarize this YouTube source for a practical engineering digest item.
 
-Write in plain English with concise bullets that cover:
-- Core thesis or main claim
-- Key supporting points and evidence
-- Notable examples, numbers, or concrete details
-- Actionable takeaways or decisions to make
+Output in this exact order:
+Title: <short, specific>
 
-Avoid fluff, sponsor-read style language, and repetition.
-If uncertainty is high, state assumptions briefly.
+TL;DR: <one sentence>
+
+Key points:
+- <3-5 bullets with one idea per bullet>
+
+Why it matters:
+- <one bullet>
+
+Optional sections (only include when present in the source):
+Evidence:
+- <1-2 concrete examples, numbers, dates, or named results>
+
+Caveat:
+- <1 bullet for uncertainty, source bias, or missing evidence>
+
+Rules:
+- Omit optional section headers when empty. Do not use placeholders.
+- No intro/outro fluff (for example: "Here is a summary").
+- No citation markers like [1] or [2].
+- Never use sponsor-read tone. Never repeat points.
+- Keep output factual. Never speculate.

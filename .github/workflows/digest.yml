@@ -74,11 +74,16 @@ jobs:
         run: |
           set -euo pipefail
           uv run python -m src | tee /tmp/pipeline.log
-          uv run python scripts/extract_pipeline_outputs.py /tmp/pipeline.log
+
+      - name: Extract pipeline outputs
+        id: extract_outputs
+        if: ${{ always() }}
+        continue-on-error: true
+        run: uv run python -m scripts.extract_pipeline_outputs /tmp/pipeline.log
 
       - name: Commit and push pipeline outputs
         id: persist_outputs
-        if: ${{ steps.pipeline.outputs.processed_urls != '0' }}
+        if: ${{ steps.pipeline.outcome == 'success' }}
         run: |
           set -euo pipefail
 
@@ -107,19 +112,35 @@ jobs:
           path: /tmp/pipeline.log
           if-no-files-found: ignore
 
+      - name: Write run history summary
+        id: run_history
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DIGEST_DATE: ${{ steps.extract_outputs.outputs.digest_date || 'unknown' }}
+          PIPELINE_RESULT: ${{ steps.pipeline.outcome || 'unknown' }}
+          PROCESSED_URLS: ${{ steps.extract_outputs.outputs.processed_urls || 'unknown' }}
+          PIPELINE_SECONDS: ${{ steps.extract_outputs.outputs.pipeline_seconds || 'unknown' }}
+          SECONDS_PER_PROCESSED_URL: ${{ steps.extract_outputs.outputs.seconds_per_processed_url || 'unknown' }}
+          FETCH_FAILED_COUNT: ${{ steps.extract_outputs.outputs.fetch_failed_count || 'unknown' }}
+        run: uv run python -m scripts.write_run_history_summary
+
       - name: Write job summary
         if: ${{ always() }}
         env:
-          PIPELINE_RESULT: ${{ steps.pipeline.outcome }}
-          DIGEST_DATE: ${{ steps.pipeline.outputs.digest_date || 'unknown' }}
-          PROCESSED_URLS: ${{ steps.pipeline.outputs.processed_urls || 'unknown' }}
-          PIPELINE_SECONDS: ${{ steps.pipeline.outputs.pipeline_seconds || 'unknown' }}
-          SECONDS_PER_PROCESSED_URL: ${{ steps.pipeline.outputs.seconds_per_processed_url || 'unknown' }}
-          FETCH_OK_ARTICLE_COUNT: ${{ steps.pipeline.outputs.fetch_ok_article_count || 'unknown' }}
-          FETCH_OK_YOUTUBE_COUNT: ${{ steps.pipeline.outputs.fetch_ok_youtube_count || 'unknown' }}
-          FETCH_FAILED_COUNT: ${{ steps.pipeline.outputs.fetch_failed_count || 'unknown' }}
-          DIGEST_CREATED: ${{ steps.pipeline.outputs.digest_created || 'unknown' }}
+          PIPELINE_RESULT: ${{ steps.pipeline.outcome || 'unknown' }}
+          DIGEST_DATE: ${{ steps.extract_outputs.outputs.digest_date || 'unknown' }}
+          PROCESSED_URLS: ${{ steps.extract_outputs.outputs.processed_urls || 'unknown' }}
+          PIPELINE_SECONDS: ${{ steps.extract_outputs.outputs.pipeline_seconds || 'unknown' }}
+          SECONDS_PER_PROCESSED_URL: ${{ steps.extract_outputs.outputs.seconds_per_processed_url || 'unknown' }}
+          FETCH_OK_ARTICLE_COUNT: ${{ steps.extract_outputs.outputs.fetch_ok_article_count || 'unknown' }}
+          FETCH_OK_YOUTUBE_COUNT: ${{ steps.extract_outputs.outputs.fetch_ok_youtube_count || 'unknown' }}
+          FETCH_FAILED_COUNT: ${{ steps.extract_outputs.outputs.fetch_failed_count || 'unknown' }}
+          DIGEST_CREATED: ${{ steps.extract_outputs.outputs.digest_created || 'unknown' }}
           COMMIT_STATUS: ${{ steps.persist_outputs.outputs.commit_status || 'not_required' }}
+          EXTRACT_OUTPUTS_RESULT: ${{ steps.extract_outputs.outcome || 'unknown' }}
+          RUN_HISTORY_RESULT: ${{ steps.run_history.outcome || 'unknown' }}
         run: |
           {
             echo "## Digest run"
@@ -133,16 +154,10 @@ jobs:
             echo "- Fetch failures: ${FETCH_FAILED_COUNT}"
             echo "- Digest created: ${DIGEST_CREATED}"
             echo "- Output persistence: ${COMMIT_STATUS}"
+            if [ "${EXTRACT_OUTPUTS_RESULT}" != "success" ]; then
+              echo "- Warning: telemetry output extraction failed (non-blocking)"
+            fi
+            if [ "${RUN_HISTORY_RESULT}" != "success" ]; then
+              echo "- Warning: run history summary failed (non-blocking)"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Write run history summary
-        if: ${{ always() }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          DIGEST_DATE: ${{ steps.pipeline.outputs.digest_date || 'unknown' }}
-          PIPELINE_RESULT: ${{ steps.pipeline.outcome }}
-          PROCESSED_URLS: ${{ steps.pipeline.outputs.processed_urls || 'unknown' }}
-          PIPELINE_SECONDS: ${{ steps.pipeline.outputs.pipeline_seconds || 'unknown' }}
-          SECONDS_PER_PROCESSED_URL: ${{ steps.pipeline.outputs.seconds_per_processed_url || 'unknown' }}
-          FETCH_FAILED_COUNT: ${{ steps.pipeline.outputs.fetch_failed_count || 'unknown' }}
-        run: uv run python scripts/write_run_history_summary.py

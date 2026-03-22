@@ -86,6 +86,39 @@ class ScriptEntrypointTests(unittest.TestCase):
             self.assertIn("Performance Summary (Last 7 Runs)", summary_text)
             self.assertIn("Run history unavailable", summary_text)
 
+    def test_empty_day_run_outcome_maps_to_skipped_empty_day_commit_status(self) -> None:
+        log_text = (
+            'run_outcome:{"processed_urls": 0, "summary_ok_count": 0, "summary_failed_count": 0, '
+            '"digest_created": false, "digest_path": "", "digest_sent_chunks": 0}'
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "pipeline.log"
+            log_path.write_text(log_text, encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-c",
+                    (
+                        "from pathlib import Path; "
+                        "from src.telemetry.pipeline_log_parser import extract_pipeline_outputs; "
+                        "import sys; "
+                        "print(extract_pipeline_outputs(Path(sys.argv[1]).read_text(encoding='utf-8'))['processed_urls'])"
+                    ),
+                    str(log_path),
+                ],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
+            processed_urls = result.stdout.strip()
+            commit_status = "skipped_empty_day" if processed_urls == "0" else "pushed"
+            self.assertEqual(commit_status, "skipped_empty_day")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,187 +1,246 @@
 # Architecture Design Document - Telegram Research Digest Bot
 
-> A serverless, zero-infrastructure personal knowledge pipeline built on GitHub Actions, Telegram, and OpenRouter.
+> A serverless personal knowledge pipeline built on GitHub Actions, Telegram, OpenRouter, and NotebookLM.
 
 ---
 
-## Problem & Context
+## Problem and Context
 
-Engineers accumulate URLs throughout the day - articles shared in chats, YouTube talks flagged for later, threads worth reading. The default outcome is a browser graveyard: tabs that never get read, bookmarks that never get revisited.
+Engineers accumulate URLs throughout the day: articles shared in chats, YouTube talks flagged for later, PDFs worth reading, threads that should not disappear into a tab graveyard.
 
-Existing tools either require too much friction at ingestion time (tagging, categorizing, opening an app) or too much infrastructure to self-host (servers, databases, background workers). The result is that most saved content is never consumed.
+Most capture tools fail in one of two ways:
 
-The goal here is different: **make saving effortless and let the system do the synthesis work**, delivering a daily digest you actually read because it's already summarized.
+- they add friction at ingestion time
+- they require more infrastructure than the problem warrants
+
+The goal here is different: keep capture trivial, do the synthesis in batch, and deliver something readable without adding a server, database, or always-on worker.
 
 ---
 
-## Design Philosophy
+## Design Axioms
 
-Four principles govern every decision in this system. They are listed here not as constraints but as *axioms* - the reasoning that makes the architecture coherent rather than accidental.
+These choices shape the system more than any implementation detail:
 
-```
+```text
 Filesystem as database
 Git as history
 Telegram as ingestion queue
 GitHub Actions as scheduler
 ```
 
-**Filesystem as database** means every piece of knowledge is a Markdown file you can read, grep, diff, and back up without tooling. No schema migrations, no connection strings, no vendor lock-in.
-
-**Git as history** means the audit trail is the repository itself. Every day's digest is a commit. You can see what you were reading in any given week by browsing the log.
-
-**Telegram as ingestion queue** means the capture friction is exactly one action: paste a URL. No app to open, no form to fill. The phone you already have open is the interface.
-
-**GitHub Actions as scheduler** means there is no server to provision, patch, or pay for. Execution is triggered, runs to completion, and disappears. The pipeline exists only when it's needed.
+- Filesystem as database: outputs are Markdown files that can be read, diffed, searched, and backed up with standard tools.
+- Git as history: state and artifacts live in the repository, so operational history and content history stay aligned.
+- Telegram as ingestion queue: the capture interface is a chat window that is already open on the device where links appear.
+- GitHub Actions as scheduler: execution is ephemeral, scheduled, and self-contained.
 
 ---
 
-## Architecture Overview
+## System Overview
 
-```
+```text
 User -> Telegram Bot
          |
-         |  URLs accumulate as messages (polling at run time)
+         | URLs accumulate as chat messages
          v
-   GitHub Action (daily cron or manual dispatch)
+   GitHub Action (cron or manual dispatch)
          |
          v
-   Python Pipeline
-   |-- Read Telegram updates (offset-based, stateful)
-   |-- Filter by ALLOWED_CHAT_ID
-   |-- Extract & normalize URLs
-   |-- For each URL:
-   |   |-- Detect type (article / non-article)
-   |   |-- Fetch article content or ignore non-article URLs
-   |   |-- Generate summary -> write data/sources/YYYY-MM-DD/slug.md
-   |   `-- On failure -> write data/failed/YYYY-MM-DD/slug.md
-   |-- Generate digest -> write data/digests/YYYY-MM-DD.md
-   |-- Commit all changes
-   `-- Send digest to Telegram
+   Python pipeline
+   |-- Poll Telegram updates via state.json
+   |-- Filter messages by TELEGRAM_CHAT_ID
+   |-- Extract and normalize URLs
+   |-- Fetch article/PDF content when applicable
+   |-- Route summarization work:
+   |   |-- article fetch ok -> OpenRouter
+   |   |-- YouTube -> NotebookLM
+   |   `-- eligible article fetch failure -> NotebookLM fallback
+   |-- Write source artifacts to data/sources/YYYY-MM-DD/
+   |-- Write failure artifacts to data/failed/YYYY-MM-DD/
+   |-- Generate digest at data/digests/YYYY-MM-DD.md
+   |-- Send digest back to Telegram
+   `-- Emit run_outcome / run_metrics to stdout
+
+   Workflow post-processing
+   |-- Extract pipeline outputs from logs
+   |-- Persist state/data changes when required
+   |-- Write GitHub job summary
+   `-- Append recent run-history summary
 ```
 
-**Components:**
+The main path is content processing. The observability path runs beside it and turns structured pipeline output into workflow-level visibility.
 
-| Component | Role | Rationale |
+---
+
+## Components
+
+| Component | Role | Notes |
 |---|---|---|
-| Telegram Bot | Ingestion interface + delivery channel | Ubiquitous, zero-friction, API-first |
-| GitHub Actions | Execution runtime + scheduler | Free, ephemeral, no ops burden |
-| GitHub Repository | Storage + version history | Durable, browsable, diffable |
-| OpenRouter (free models) | Summarization provider | Dynamic free-model discovery with cached selection and fallback rotation |
-| `state.json` | Telegram polling cursor | Single-field, committed, auditable |
+| Telegram Bot | Ingestion interface and delivery channel | Same interface for input and output; filtered to one chat via `TELEGRAM_CHAT_ID` |
+| GitHub Actions | Scheduler and execution runtime | Daily cron plus manual dispatch; no persistent process |
+| Python pipeline (`src/`) | Orchestration, fetch, summarize, digest | Batch-oriented, one pass per run |
+| OpenRouter | Article summarization backend | Used when article content was fetched successfully |
+| NotebookLM | YouTube summarization and article fallback backend | Used directly for YouTube and selectively for fetch failures |
+| Git repository | State, artifacts, and audit history | `state.json` plus `data/` outputs are committed |
+| Telemetry layer | Operational visibility | Structured log lines, workflow extraction, job summary, run-history report |
+
+---
+
+## Data and State Ownership
+
+- `state.json` stores the Telegram update cursor and is the only persistent polling state.
+- `data/sources/YYYY-MM-DD/` stores successful summary artifacts.
+- `data/failed/YYYY-MM-DD/` stores failure records with URL and error context.
+- `data/digests/YYYY-MM-DD.md` stores the rendered daily digest.
+- Workflow logs store operational signals (`run_outcome`, `run_metrics`) that can be parsed without reading repository files.
+
+This keeps two concerns separate:
+
+- content artifacts live in the repository as first-class outputs
+- run visibility lives in workflow logs and summaries as first-class operational signals
+
+---
+
+## Backend Routing and Fallback
+
+The system no longer has a single summarization path. Routing is based on URL kind and fetch outcome.
+
+| Input / outcome | Backend / result |
+|---|---|
+| Article URL, fetch succeeds | Summarize with OpenRouter |
+| YouTube URL | Summarize with NotebookLM |
+| Article URL, fetch fails with supported fallback reason and fallback enabled | Retry summarization from URL with NotebookLM |
+| Any URL with irrecoverable failure | Write failure record to `data/failed/` |
+
+Supported article fallback reasons include network failures, blocked responses, TLS issues, short extraction results, and PDF extraction failures. This keeps the pipeline moving without hiding degraded cases.
+
+The effect is deliberate:
+
+- OpenRouter handles the normal article path where content is already available.
+- NotebookLM handles source types or failure modes where URL-native processing is a better fit.
+- Failure records remain visible even when fallback is available.
 
 ---
 
 ## Key Design Decisions
 
-### 1. No persistent server
+### 1. Batch processing over real-time processing
 
-**Decision:** The pipeline runs exclusively as a GitHub Actions workflow. There is no always-on process.
+**Decision:** URLs accumulate during the day and are processed in one scheduled run.
 
-**Alternative considered:** A lightweight server (VPS, fly.io, Railway) hosting a webhook receiver and background worker.
-
-**Why we didn't:** A server introduces operational surface area - uptime monitoring, SSL, restarts, cost - that is disproportionate to the problem. The digest is inherently a batch operation; near-real-time delivery adds no value. GitHub Actions gives us scheduling, secrets management, logging, and a free execution environment with zero ongoing maintenance.
-
----
+**Why:** The value is in synthesis, not immediacy. Batch processing matches the digest model and keeps the runtime ephemeral.
 
 ### 2. Polling over webhooks
 
-**Decision:** Telegram updates are fetched via `getUpdates` polling at pipeline start, not via webhooks.
+**Decision:** Telegram updates are fetched with polling at run time.
 
-**Alternative considered:** Telegram webhook pointing to a persistent endpoint.
+**Why:** Webhooks would require a reachable HTTPS endpoint and therefore a persistent service. Polling preserves the serverless constraint.
 
-**Why we didn't:** Webhooks require a reachable HTTPS endpoint, which requires a server. Since the serverless constraint is non-negotiable, polling is the only viable model. The design accepts the trade-off: URLs sent during the day accumulate and are processed in batch, not in real time. This is a feature, not a bug - it aligns with the digest model.
+### 3. Committed state over external state stores
 
----
+**Decision:** The Telegram cursor lives in `state.json` and is committed with the repository outputs.
 
-### 3. State as a committed file
+**Why:** A single committed file is inspectable, durable, and easy to recover from. It avoids adding a second persistence system for one integer.
 
-**Decision:** `state.json` holds a single value - the last processed Telegram update ID - and is committed to the repository as part of the daily digest commit.
+### 4. Filesystem artifacts over database records
 
-**Alternative considered:** External state store (Redis, DynamoDB, a GitHub Gist).
+**Decision:** Summaries, failures, and digests are stored as Markdown files under `data/`.
 
-**Why we didn't:** External state adds a dependency, credentials to manage, and a failure mode. A committed file is durable, inspectable, and version-controlled. If something goes wrong, the state is visible in the Git log. The single-daily-run model means there is no meaningful concurrency risk - the concurrency guard in the workflow (`cancel-in-progress: false`) ensures only one execution runs at a time.
+**Why:** The output is meant to be read directly. Markdown keeps the system portable and makes review/debugging possible with normal repository tools.
 
-The commit strategy is intentionally simple: if the latest commit is the same-day digest commit, amend it; otherwise create a new digest commit for that day. This keeps history clean - one digest commit per UTC day in the normal rerun flow, regardless of whether the run was triggered by cron or manually.
+### 5. Provider split by capability, not by branding
 
-The workflow follows three guardrails:
-- Empty-day runs (no URLs processed) skip commit and push entirely.
-- Same-day reruns use `git commit --amend` + `git push --force-with-lease`.
-- First run of a day uses a normal `git commit` + `git push`.
+**Decision:** OpenRouter and NotebookLM are used for different classes of work.
 
----
+**Why:** Article summaries and URL-native source handling have different constraints. A split backend model keeps the normal path simple while preserving a fallback path for degraded fetch cases and YouTube sources.
 
-### 4. Filesystem as knowledge base
+### 6. Failure isolation over fail-fast behavior
 
-**Decision:** Summaries and digests are Markdown files organized by date in the repository.
+**Decision:** A bad URL writes a failure record and the run continues.
 
-**Alternative considered:** SQLite, a vector store, or a hosted notes service.
-
-**Why we didn't:** A database would make the knowledge base opaque and non-portable. Markdown files are human-readable, git-diffable, searchable with standard tools, and renderable on GitHub with no additional tooling. The structure (`data/sources/YYYY-MM-DD/`) makes temporal browsing natural. For the current use case - personal knowledge archival and daily consumption - filesystem access patterns are sufficient.
+**Why:** A daily digest is more useful with partial results than with no results. Failures are preserved as artifacts rather than hidden in logs only.
 
 ---
 
-### 5. Prompt files as the configuration surface
+## Execution Model
 
-**Decision:** LLM output format and length are controlled entirely by prompt files (`prompts/*.txt`). No token limits or format rules are hardcoded in pipeline logic.
+The live workflow behavior is intentionally simple:
 
-**Alternative considered:** Hardcoded instructions inline in Python; a structured config file.
+- the digest workflow runs on a daily cron and via manual dispatch
+- required secrets are validated before the pipeline runs
+- the pipeline executes through `python -m src`
+- pipeline outputs are extracted from logs in a separate workflow step
+- if no URLs were processed, the workflow skips commit and push
+- if URLs were processed but no staged output changes exist, the workflow skips commit and push
+- otherwise the workflow creates a standard daily commit and pushes it
 
-**Why we didn't:** Prompt files make the system's behavior tunable without touching code. Changing the digest format, adjusting summary length, or adding a new section to outputs is a text edit, not a deployment. This separation of concerns is especially valuable in a one-person project where experimentation should be low-friction.
-
----
-
-### 6. Article-only summarization scope
-
-**Decision:** Only article URLs are summarized. Non-article URLs (including YouTube) are silently ignored in v1.
-
-**Alternative considered:** YouTube transcript extraction and model-native video summarization paths.
-
-**Why we didn't:** Reliable video summarization from GitHub-hosted runners requires either paid proxy infrastructure or lower-trust model behavior. Article-only scope preserves zero-cost operation and keeps output quality predictable.
+The repository also contains pure commit-strategy logic for a one-commit-per-day amend policy, but the checked-in workflow currently documents and executes the simpler create-only behavior. This document describes the live workflow.
 
 ---
 
-### 7. Silent failure with explicit record
+## Observability and Run Telemetry
 
-**Decision:** When a URL fails (timeout, paywall, extraction error), the pipeline writes a failure record to `data/failed/YYYY-MM-DD/` and continues. The run does not abort.
+Observability is part of the system design, not an afterthought.
 
-**Alternative considered:** Fail-fast (abort on first error); retry with backoff.
+The pipeline emits two structured log contracts:
 
-**Why we didn't:** Fail-fast would mean one bad URL kills the entire digest. Given that paywalled content is a common and expected failure mode, this is unacceptable. Retry with backoff adds complexity and extends runtime unpredictably. The failure record in `data/failed/` is a first-class artifact - visible, inspectable, and usable by a future `/retry` command without any architectural changes.
+- `run_outcome`: digest creation and delivery outcome
+- `run_metrics`: processed URL counts, source mix, failures, and elapsed time
+
+The workflow consumes those signals in later steps to:
+
+- extract outputs without re-running business logic
+- write a job summary for the current run
+- build a recent run-history summary from prior workflow logs
+
+Telemetry failures are treated as non-blocking. A digest run that succeeds should still persist outputs even if summary extraction or historical reporting fails.
+
+This separation has two effects:
+
+- content generation remains independent from workflow reporting
+- operational visibility improves without making the content path more fragile
+
+---
+
+## Failure Model
+
+The system assumes individual URLs will fail for ordinary reasons: timeouts, blocked pages, extraction failures, provider errors, or stale authentication state.
+
+The response is layered:
+
+- recover when a different backend can handle the case
+- record failures as dated artifacts when recovery is not possible
+- continue the batch rather than abort the run
+- keep telemetry/reporting non-blocking so successful content still lands
+
+That model keeps the system honest about degraded inputs while preserving the daily digest as the primary output.
 
 ---
 
 ## Accepted Trade-offs
 
-These are known limitations explicitly accepted for this version. They are not oversights.
+These limitations are deliberate for the current scope:
 
 | Trade-off | Accepted because |
 |---|---|
-| No cross-day URL deduplication | Same URL on two days is rare; two summaries is harmless; the fix (a URL index file) is additive when needed |
-| No on-demand digest from Telegram | Requires a persistent process or webhook; incompatible with the serverless constraint; manual dispatch from GitHub UI is sufficient |
-| Non-article URLs are ignored in v1 | Keeps pipeline zero-cost and predictable; video support can be added later behind optional paid infrastructure |
-| Retry complexity and backoff tuning | Retries with exponential backoff are implemented for 429/resource exhaustion, but daily run volume is low so defaults remain intentionally conservative |
-| Partial results on mid-run API failure | Acceptable for a personal digest; the committed partial state is better than nothing |
+| No real-time processing | Conflicts with the serverless batch model |
+| Single-user boundary | Keeps state, permissions, and delivery simple |
+| Markdown artifacts instead of a queryable store | Readability and portability matter more than complex retrieval |
+| Workflow-log telemetry instead of a dedicated monitoring stack | Operational visibility is needed, but full observability infrastructure would outweigh the problem |
+| Partial results on degraded inputs | A daily digest with explicit failures is better than an all-or-nothing run |
 
 ---
 
 ## Evolution Path
 
-The architecture was designed to grow along two axes without requiring structural changes.
+The current shape leaves room for additive changes without changing the core architecture:
 
-**Additive (no rewrites):**
-- Telegram bot commands (`/queue`, `/retry`, `/digest`) - add a command parser to `telegram_client.py`
-- Weekly digests - add a second workflow trigger and a `weekly_digest.py` script consuming existing daily files
-- RSS ingestion - add a new ingestion module; the pipeline from URL onwards is unchanged
-- URL preview feedback on save - extend the acknowledgement message with title extraction
-- Tag support - add a metadata field to Markdown frontmatter; the filesystem structure supports it natively
+- alternate ingestion sources can feed the same fetch/summarize/digest pipeline
+- richer Telegram commands can be layered onto the existing single-user interface
+- additional reporting can build on existing telemetry contracts
+- a richer retrieval layer can be added later without changing the artifact format
 
-**Requires architectural evolution:**
-- Multi-user / team mode - `ALLOWED_CHAT_ID` becomes a list or a shared channel; state scoping becomes per-user; Git history remains shared
-- Search across the knowledge base - the flat Markdown structure supports `git grep` today; a proper index (simple JSON manifest or embeddings file) would need to be built and maintained incrementally
-- Real-time processing - fundamentally incompatible with the serverless model; would require a persistent process and a webhook, which invalidates the core constraint
-
-The deliberate choice to keep the architecture simple now means the evolution path is clear: additive features slot in without rewrites, and the one genuinely breaking change (real-time) is also the one that contradicts the original design axioms.
+The clearest architectural break would be real-time or multi-user operation. Both would require revisiting the current state, scheduling, and delivery assumptions rather than extending them incrementally.
 
 ---
 
-*System designed for single-user operation. All execution is ephemeral. No infrastructure to maintain beyond the repository itself.*
+*Single-user system. Ephemeral execution. Durable artifacts and visible failure handling.*

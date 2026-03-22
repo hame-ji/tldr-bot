@@ -130,6 +130,29 @@ class ScriptEntrypointTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
             self.assertEqual(result.stdout.strip(), "3")
 
+    def test_extract_processed_urls_module_ignores_malformed_run_metrics(self) -> None:
+        log_text = "\n".join(
+            [
+                'run_outcome:{"processed_urls": 4, "summary_ok_count": 3, "summary_failed_count": 1, "digest_created": true, "digest_path": "data/digests/2026-03-22.md", "digest_sent_chunks": 2}',
+                'run_metrics:{"processed_urls":"not-an-int"',
+            ]
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "pipeline.log"
+            log_path.write_text(log_text, encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, "-m", "scripts.extract_processed_urls", str(log_path)],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
+            self.assertEqual(result.stdout.strip(), "4")
+
     def test_extract_processed_urls_module_fails_when_log_file_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             missing_log_path = Path(temp_dir) / "missing.log"

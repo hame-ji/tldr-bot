@@ -1,8 +1,8 @@
 # tests/
 
 Last-Reviewed-Date: 2026-03-22
-Last-Reviewed-Commit: cfdd549
-Review-Note: Added regression coverage ensuring extract_processed_urls ignores malformed run_metrics and uses run_outcome processed_urls.
+Last-Reviewed-Commit: 71478a8
+Review-Note: Added regression coverage for Telegram HTML formatting of markdown links with parenthesized URLs.
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

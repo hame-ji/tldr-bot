@@ -115,6 +115,67 @@ class TelegramClientTests(unittest.TestCase):
         self.assertEqual(body["chat_id"], 123)
         self.assertEqual(body["parse_mode"], "HTML")
 
+    @patch("src.telegram_client._telegram_api")
+    def test_send_digest_formats_markdownish_text_for_html_parse_mode(self, mock_api) -> None:
+        mock_api.return_value = {"ok": True, "result": {"message_id": 1}}
+        digest_text = (
+            "## Item 1\n\n"
+            "URL: [example](https://example.com/path(with)parens)\n\n"
+            "**Title:** A & B\n"
+            "* **Action:** do it"
+        )
+
+        send_digest(bot_token="token", chat_id=123, digest_text=digest_text)
+
+        body = mock_api.call_args[0][2]
+        self.assertIn("<b>Item 1</b>", body["text"])
+        self.assertIn('<a href="https://example.com/path(with)parens">example</a>', body["text"])
+        self.assertIn("<b>Title:</b> A &amp; B", body["text"])
+        self.assertIn("• <b>Action:</b> do it", body["text"])
+        self.assertNotIn("##", body["text"])
+        self.assertNotIn("**", body["text"])
+
+    @patch("src.telegram_client._telegram_api")
+    def test_send_digest_starts_new_message_for_each_item_section(self, mock_api) -> None:
+        mock_api.return_value = {"ok": True, "result": {"message_id": 1}}
+        digest_text = (
+            "# Daily Research Digest - 2026-03-22\n\n"
+            "Processed: 2 successful, 0 failed, 0 ignored\n\n"
+            "## Item 1\n\n"
+            "URL: https://example.com/one\n\n"
+            "First item text\n\n"
+            "## Item 2\n\n"
+            "URL: https://example.com/two\n\n"
+            "Second item text"
+        )
+
+        send_digest(bot_token="token", chat_id=123, digest_text=digest_text, max_chunk_length=4096)
+
+        self.assertEqual(mock_api.call_count, 3)
+        sent_texts = [call.args[2]["text"] for call in mock_api.call_args_list]
+        self.assertIn("<b>Daily Research Digest - 2026-03-22</b>", sent_texts[0])
+        self.assertIn("<b>Item 1</b>", sent_texts[1])
+        self.assertIn("<b>Item 2</b>", sent_texts[2])
+
+    @patch("src.telegram_client._telegram_api")
+    def test_send_digest_splits_large_item_but_keeps_next_item_boundary(self, mock_api) -> None:
+        mock_api.return_value = {"ok": True, "result": {"message_id": 1}}
+        long_text = "X" * 250
+        digest_text = (
+            "## Item 1\n\n"
+            f"{long_text}\n\n"
+            "## Item 2\n\n"
+            "Short"
+        )
+
+        send_digest(bot_token="token", chat_id=123, digest_text=digest_text, max_chunk_length=120)
+
+        self.assertGreaterEqual(mock_api.call_count, 3)
+        sent_texts = [call.args[2]["text"] for call in mock_api.call_args_list]
+        self.assertIn("<b>Item 1</b>", sent_texts[0])
+        self.assertIn("<b>Item 2</b>", sent_texts[-1])
+        self.assertNotIn("<b>Item 2</b>", "\n".join(sent_texts[:-1]))
+
 
 if __name__ == "__main__":
     unittest.main()

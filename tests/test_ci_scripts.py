@@ -130,6 +130,36 @@ class ScriptEntrypointTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
             self.assertEqual(result.stdout.strip(), "3")
 
+    def test_extract_processed_urls_module_fails_when_log_file_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            missing_log_path = Path(temp_dir) / "missing.log"
+            result = subprocess.run(
+                [sys.executable, "-m", "scripts.extract_processed_urls", str(missing_log_path)],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("pipeline log not found", result.stderr)
+
+    def test_extract_processed_urls_module_fails_when_run_outcome_is_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_path = Path(temp_dir) / "pipeline.log"
+            log_path.write_text("run_metrics:{\"metrics_version\":1}", encoding="utf-8")
+
+            result = subprocess.run(
+                [sys.executable, "-m", "scripts.extract_processed_urls", str(log_path)],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("invalid pipeline log contract", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -22,4 +22,5 @@ Rules:
 - Omit optional section headers when empty. Do not use placeholders.
 - No intro/outro fluff (for example: "Here is a summary").
 - No citation markers like [1] or [2].
-- Avoid sponsor-read tone and repetition.
+- Never use sponsor-read tone. Never repeat points.
+- Keep output factual. Never speculate.

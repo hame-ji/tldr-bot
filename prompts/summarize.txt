@@ -23,4 +23,4 @@ Rules:
 - Omit optional section headers when empty. Do not use placeholders.
 - No intro/outro fluff (for example: "Here is a summary").
 - No citation markers like [1] or [2].
-- Keep output factual and avoid speculation.
+- Keep output factual. Never speculate.

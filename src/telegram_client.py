@@ -11,6 +11,13 @@ import requests
 
 
 URL_PATTERN = re.compile(r"https?://[^\s<>()\[\]{}\"']+")
+ITEM_SECTION_PATTERN = re.compile(r"^## Item \d+\s*$", re.MULTILINE)
+FAILED_SECTION_PATTERN = re.compile(r"^## Failed URLs\s*$", re.MULTILINE)
+MARKDOWN_LINK_PATTERN = re.compile(r"\[([^\]]+)\]\((https?://(?:[^\s()]|\([^\s()]*\))+)\)")
+BOLD_PATTERN = re.compile(r"\*\*(.+?)\*\*")
+HEADING_PATTERN = re.compile(r"^#{1,2}\s+(.+)$")
+BULLET_PATTERN = re.compile(r"^[-*]\s+(.+)$")
+NUMBERED_PATTERN = re.compile(r"^(\d+)\.\s+(.+)$")
 
 
 def load_offset(state_path: str | Path = "state.json") -> int | None:
@@ -114,7 +121,7 @@ def _split_long_text(text: str, max_length: int) -> list[str]:
     return [text[start : start + max_length] for start in range(0, len(text), max_length)]
 
 
-def chunk_text_by_paragraph(text: str, max_length: int = 4096) -> list[str]:
+def chunk_text_by_paragraph(text: str, max_length: int = 4096, *, escape_html: bool = True) -> list[str]:
     if not text:
         return []
 
@@ -123,7 +130,7 @@ def chunk_text_by_paragraph(text: str, max_length: int = 4096) -> list[str]:
     current = ""
 
     for paragraph in paragraphs:
-        escaped_paragraph = html.escape(paragraph, quote=False)
+        escaped_paragraph = html.escape(paragraph, quote=False) if escape_html else paragraph
 
         if len(escaped_paragraph) > max_length:
             if current:
@@ -153,19 +160,95 @@ def send_digest(
     parse_mode: str = "HTML",
     max_chunk_length: int = 4096,
 ) -> list[dict[str, Any]]:
-    chunks = chunk_text_by_paragraph(digest_text, max_length=max_chunk_length)
+    sections = _split_digest_sections(digest_text)
     responses: list[dict[str, Any]] = []
 
-    for chunk in chunks:
-        body: dict[str, Any] = {
-            "chat_id": chat_id,
-            "text": chunk,
-        }
-        if parse_mode:
-            body["parse_mode"] = parse_mode
-        responses.append(_telegram_api(bot_token, "sendMessage", body, post=True))
+    for section in sections:
+        if parse_mode == "HTML":
+            section = _format_digest_section_as_html(section)
+            chunks = chunk_text_by_paragraph(section, max_length=max_chunk_length, escape_html=False)
+        else:
+            chunks = chunk_text_by_paragraph(section, max_length=max_chunk_length)
+
+        for chunk in chunks:
+            body: dict[str, Any] = {
+                "chat_id": chat_id,
+                "text": chunk,
+            }
+            if parse_mode:
+                body["parse_mode"] = parse_mode
+            responses.append(_telegram_api(bot_token, "sendMessage", body, post=True))
 
     return responses
+
+
+def _split_digest_sections(digest_text: str) -> list[str]:
+    item_matches = list(ITEM_SECTION_PATTERN.finditer(digest_text))
+    failed_match = FAILED_SECTION_PATTERN.search(digest_text)
+
+    if not item_matches:
+        section = digest_text.strip()
+        return [section] if section else []
+
+    failed_start = failed_match.start() if failed_match else None
+    sections: list[str] = []
+
+    intro = digest_text[: item_matches[0].start()].strip()
+    if intro:
+        sections.append(intro)
+
+    for index, match in enumerate(item_matches):
+        next_start = item_matches[index + 1].start() if index + 1 < len(item_matches) else len(digest_text)
+        end = next_start
+        if failed_start is not None and match.start() < failed_start < next_start:
+            end = failed_start
+        item_section = digest_text[match.start() : end].strip()
+        if item_section:
+            sections.append(item_section)
+
+    if failed_start is not None:
+        failed_section = digest_text[failed_start:].strip()
+        if failed_section:
+            sections.append(failed_section)
+
+    return sections
+
+
+def _format_digest_section_as_html(section: str) -> str:
+    rendered_lines = [_format_digest_line_as_html(line) for line in section.splitlines()]
+    return "\n".join(rendered_lines)
+
+
+def _format_digest_line_as_html(line: str) -> str:
+    stripped = line.strip()
+    if not stripped:
+        return ""
+
+    heading_match = HEADING_PATTERN.match(stripped)
+    bullet_match = BULLET_PATTERN.match(stripped)
+    numbered_match = NUMBERED_PATTERN.match(stripped)
+
+    prefix = ""
+    is_heading = False
+    content = stripped
+    if heading_match:
+        content = heading_match.group(1)
+        is_heading = True
+    elif bullet_match:
+        content = bullet_match.group(1)
+        prefix = "• "
+    elif numbered_match:
+        content = numbered_match.group(2)
+        prefix = f"{numbered_match.group(1)}. "
+
+    escaped = html.escape(content, quote=False)
+    escaped = BOLD_PATTERN.sub(r"<b>\1</b>", escaped)
+    escaped = MARKDOWN_LINK_PATTERN.sub(r'<a href="\2">\1</a>', escaped)
+    rendered = prefix + escaped
+
+    if is_heading:
+        return f"<b>{rendered}</b>"
+    return rendered
 
 
 def send_digest_from_env(digest_text: str) -> list[dict[str, Any]]:

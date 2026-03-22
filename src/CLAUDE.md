@@ -1,8 +1,8 @@
 # src/
 
 Last-Reviewed-Date: 2026-03-22
-Last-Reviewed-Commit: 84f978d
-Review-Note: Simplify: cache prompt on first use, drop unused return, generator expressions for counting.
+Last-Reviewed-Commit: 7643a0d
+Review-Note: Simplify: pre-compile inline regex, reorder bold/link substitution in digest HTML formatter.
 
 Covers `src/` except `src/summarization/` and `src/telemetry/` (routed separately).
 

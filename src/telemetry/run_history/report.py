@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from .github_client import GitHubActionsClient
-from .models import RunHistorySnapshot
+from .models import PerformanceSummary, PerformanceSummaryRow, RunHistorySnapshot
 from .parser import extract_run_metrics_from_logs_zip
 
 
@@ -135,28 +135,62 @@ def fetch_history_snapshots(
     return snapshots
 
 
-def render_performance_summary(snapshots: list[RunHistorySnapshot], window_size: int) -> str:
+def build_performance_summary(
+    snapshots: list[RunHistorySnapshot],
+    window_size: int,
+) -> PerformanceSummary:
+    comparable_snapshots: list[RunHistorySnapshot] = []
+    skipped_missing_metrics_count = 0
+    skipped_zero_processed_count = 0
+    skipped_missing_sec_per_url_count = 0
+
+    for snapshot in snapshots:
+        if len(comparable_snapshots) >= window_size:
+            break
+        if not snapshot.metrics_available:
+            skipped_missing_metrics_count += 1
+            continue
+        if snapshot.processed_urls is None or snapshot.processed_urls <= 0:
+            skipped_zero_processed_count += 1
+            continue
+        if snapshot.seconds_per_processed_url is None:
+            skipped_missing_sec_per_url_count += 1
+            continue
+
+        comparable_snapshots.append(snapshot)
+
+    rows = [
+        PerformanceSummaryRow(
+            snapshot=snapshot,
+            delta_sec_per_url=(
+                None
+                if index + 1 >= len(comparable_snapshots)
+                else snapshot.seconds_per_processed_url
+                - comparable_snapshots[index + 1].seconds_per_processed_url
+            ),
+        )
+        for index, snapshot in enumerate(comparable_snapshots)
+    ]
+
+    return PerformanceSummary(
+        window_size=window_size,
+        rows=rows,
+        skipped_missing_metrics_count=skipped_missing_metrics_count,
+        skipped_zero_processed_count=skipped_zero_processed_count,
+        skipped_missing_sec_per_url_count=skipped_missing_sec_per_url_count,
+    )
+
+
+def render_performance_summary(summary: PerformanceSummary) -> str:
     lines = [
-        f"## Performance Summary (Last {window_size} Runs)",
+        f"## Performance Summary (Last {summary.window_size} Comparable Runs)",
         "",
         "| Run | Date | Status | Processed | Pipeline (s) | Sec/URL | Fetch failed | Delta Sec/URL |",
         "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |",
     ]
 
-    previous_snapshot: Optional[RunHistorySnapshot] = None
-    missing_metrics_rows = 0
-    for snapshot in snapshots:
-        if not snapshot.metrics_available:
-            missing_metrics_rows += 1
-
-        delta_sec_per_url: Optional[float] = None
-        if (
-            previous_snapshot is not None
-            and snapshot.seconds_per_processed_url is not None
-            and previous_snapshot.seconds_per_processed_url is not None
-        ):
-            delta_sec_per_url = snapshot.seconds_per_processed_url - previous_snapshot.seconds_per_processed_url
-
+    for row in summary.rows:
+        snapshot = row.snapshot
         lines.append(
             "| "
             + f"#{snapshot.run_number} "
@@ -166,13 +200,18 @@ def render_performance_summary(snapshots: list[RunHistorySnapshot], window_size:
             + f"| {_format_optional_float(snapshot.pipeline_seconds)} "
             + f"| {_format_optional_float(snapshot.seconds_per_processed_url)} "
             + f"| {_format_optional_int(snapshot.fetch_failed_count)} "
-            + f"| {_format_optional_delta(delta_sec_per_url)} |"
+            + f"| {_format_optional_delta(row.delta_sec_per_url)} |"
         )
-        previous_snapshot = snapshot
 
     lines.append("")
-    if missing_metrics_rows > 0:
-        lines.append(f"_Note: {missing_metrics_rows} run(s) missing metrics contract data._")
+    if summary.skipped_run_count > 0:
+        lines.append(
+            "_Skipped recent runs: "
+            + f"{summary.skipped_run_count} total"
+            + f" ({summary.skipped_missing_metrics_count} missing metrics,"
+            + f" {summary.skipped_zero_processed_count} without processed_urls > 0,"
+            + f" {summary.skipped_missing_sec_per_url_count} missing sec/URL)._"
+        )
     else:
-        lines.append("_All rows use the metrics contract output._")
+        lines.append("_All recent runs were comparable._")
     return "\n".join(lines) + "\n"

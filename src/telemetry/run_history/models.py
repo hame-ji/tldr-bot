@@ -16,3 +16,25 @@ class RunHistorySnapshot:
     fetch_failed_count: Optional[int]
     metrics_available: bool
 
+
+@dataclass(frozen=True)
+class PerformanceSummaryRow:
+    snapshot: RunHistorySnapshot
+    delta_sec_per_url: Optional[float]
+
+
+@dataclass(frozen=True)
+class PerformanceSummary:
+    window_size: int
+    rows: list[PerformanceSummaryRow]
+    skipped_missing_metrics_count: int
+    skipped_zero_processed_count: int
+    skipped_missing_sec_per_url_count: int
+
+    @property
+    def skipped_run_count(self) -> int:
+        return (
+            self.skipped_missing_metrics_count
+            + self.skipped_zero_processed_count
+            + self.skipped_missing_sec_per_url_count
+        )

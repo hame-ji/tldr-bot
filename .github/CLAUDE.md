@@ -1,8 +1,8 @@
 # .github/ and scripts/
 
-Last-Reviewed-Date: 2026-03-22
-Last-Reviewed-Commit: cfdd549
-Review-Note: Commit gate helper now reads processed_urls from run_outcome only so malformed run_metrics does not block persistence.
+Last-Reviewed-Date: 2026-03-23
+Last-Reviewed-Commit: d66105c
+Review-Note: Run history summary script now fetches a larger recent pool before selecting comparable runs for reporting.
 
 - `ci.yml`: runs `unittest discover` on push/PR. Python 3.11 + uv. No secrets needed.
 - `digest.yml`: daily 7am UTC cron + manual trigger. Validates Telegram creds, runs pipeline via `uv run python -m src`, extracts outputs in a separate module step, and treats telemetry/history failures as non-blocking while skipping empty-day commits.

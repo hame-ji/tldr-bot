@@ -4,6 +4,7 @@ import os
 
 from src.telemetry.run_history.github_client import GitHubActionsClient
 from src.telemetry.run_history.report import (
+    build_performance_summary,
     build_current_snapshot,
     fetch_history_snapshots,
     render_performance_summary,
@@ -12,6 +13,7 @@ from src.telemetry.run_history.report import (
 
 def main() -> None:
     window_size = 7
+    recent_pool_size = max(window_size * 4, 20)
     summary_path = os.environ["GITHUB_STEP_SUMMARY"]
     current_snapshot = build_current_snapshot(
         run_id=os.environ["GITHUB_RUN_ID"],
@@ -35,14 +37,16 @@ def main() -> None:
             client=client,
             workflow_file="digest.yml",
             current_run_id=current_snapshot.run_id,
-            limit=max(0, window_size - 1),
+            limit=max(0, recent_pool_size - 1),
         )
     except Exception as exc:  # noqa: BLE001
         warning = f"_Run history unavailable ({exc.__class__.__name__}): {exc}_"
 
     report = render_performance_summary(
-        snapshots=[current_snapshot, *history][:window_size],
-        window_size=window_size,
+        build_performance_summary(
+            snapshots=[current_snapshot, *history],
+            window_size=window_size,
+        )
     )
     with open(summary_path, "a", encoding="utf-8") as file:
         file.write("\n")

@@ -9,6 +9,7 @@ from src.telemetry.run_history.parser import (
     extract_run_metrics_from_logs_zip,
 )
 from src.telemetry.run_history.report import (
+    build_performance_summary,
     build_current_snapshot,
     fetch_history_snapshots,
     render_performance_summary,
@@ -67,7 +68,7 @@ class RunHistoryReportTests(unittest.TestCase):
         self.assertEqual(snapshot.seconds_per_processed_url, 18.5)
         self.assertEqual(snapshot.fetch_failed_count, 2)
 
-    def test_render_performance_summary_computes_delta_from_previous_row(self) -> None:
+    def test_build_performance_summary_uses_previous_comparable_run_for_delta(self) -> None:
         current = RunHistorySnapshot(
             run_id=200,
             run_number=29,
@@ -90,11 +91,78 @@ class RunHistoryReportTests(unittest.TestCase):
             fetch_failed_count=2,
             metrics_available=True,
         )
+        skipped_empty = RunHistorySnapshot(
+            run_id=198,
+            run_number=27,
+            digest_date="2026-03-18",
+            status="success",
+            processed_urls=0,
+            pipeline_seconds=20.0,
+            seconds_per_processed_url=None,
+            fetch_failed_count=0,
+            metrics_available=True,
+        )
 
-        report = render_performance_summary([current, previous], window_size=7)
-        self.assertIn("Performance Summary (Last 7 Runs)", report)
+        summary = build_performance_summary([current, skipped_empty, previous], window_size=7)
+
+        self.assertEqual(len(summary.rows), 2)
+        self.assertEqual(summary.rows[0].snapshot.run_number, 29)
+        self.assertEqual(summary.rows[1].snapshot.run_number, 28)
+        self.assertEqual(summary.rows[0].delta_sec_per_url, -19.10)
+        self.assertIsNone(summary.rows[1].delta_sec_per_url)
+        self.assertEqual(summary.skipped_zero_processed_count, 1)
+
+        report = render_performance_summary(summary)
+        self.assertIn("Performance Summary (Last 7 Comparable Runs)", report)
         self.assertIn("#29", report)
-        self.assertIn("+19.10", report)
+        self.assertIn("-19.10", report)
+        self.assertNotIn("#27", report)
+        self.assertIn("Skipped recent runs: 1 total", report)
+
+    def test_build_performance_summary_tracks_skip_reasons_separately(self) -> None:
+        comparable = RunHistorySnapshot(
+            run_id=200,
+            run_number=29,
+            digest_date="2026-03-20",
+            status="success",
+            processed_urls=6,
+            pipeline_seconds=111.0,
+            seconds_per_processed_url=18.5,
+            fetch_failed_count=1,
+            metrics_available=True,
+        )
+        missing_metrics = RunHistorySnapshot(
+            run_id=199,
+            run_number=28,
+            digest_date="2026-03-19",
+            status="failure",
+            processed_urls=None,
+            pipeline_seconds=None,
+            seconds_per_processed_url=None,
+            fetch_failed_count=None,
+            metrics_available=False,
+        )
+        missing_rate = RunHistorySnapshot(
+            run_id=198,
+            run_number=27,
+            digest_date="2026-03-18",
+            status="success",
+            processed_urls=4,
+            pipeline_seconds=100.0,
+            seconds_per_processed_url=None,
+            fetch_failed_count=0,
+            metrics_available=True,
+        )
+
+        summary = build_performance_summary(
+            [comparable, missing_metrics, missing_rate],
+            window_size=7,
+        )
+
+        self.assertEqual(len(summary.rows), 1)
+        self.assertEqual(summary.skipped_missing_metrics_count, 1)
+        self.assertEqual(summary.skipped_zero_processed_count, 0)
+        self.assertEqual(summary.skipped_missing_sec_per_url_count, 1)
 
 
 class RunHistoryFetchTests(unittest.TestCase):

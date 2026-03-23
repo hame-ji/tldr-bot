@@ -83,7 +83,7 @@ class ScriptEntrypointTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
 
             summary_text = summary_path.read_text(encoding="utf-8")
-            self.assertIn("Performance Summary (Last 7 Runs)", summary_text)
+            self.assertIn("Performance Summary (Last 7 Comparable Runs)", summary_text)
             self.assertIn("Run history unavailable", summary_text)
 
     def test_empty_day_run_outcome_maps_to_skipped_empty_day_commit_status(self) -> None:

@@ -1,8 +1,8 @@
 # tests/
 
-Last-Reviewed-Date: 2026-03-22
-Last-Reviewed-Commit: 71478a8
-Review-Note: Added regression coverage for Telegram HTML formatting of markdown links with parenthesized URLs.
+Last-Reviewed-Date: 2026-03-23
+Last-Reviewed-Commit: d66105c
+Review-Note: Added run-history regression coverage for comparable-run filtering, skip aggregates, and updated summary entrypoint output.
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

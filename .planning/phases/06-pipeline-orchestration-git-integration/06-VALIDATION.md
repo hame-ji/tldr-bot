@@ -18,9 +18,9 @@ created: 2026-03-15
 | Requirement | Verification |
 |-------------|--------------|
 | STOR-01 | Unit tests and runtime checks verify summaries/digests are written as Markdown under `data/sources/` and `data/digests/` |
-| STOR-02 | Workflow tests/dry-run checks verify one digest commit is created for a new UTC day when outputs changed |
-| STOR-03 | Workflow tests/dry-run checks verify same-day re-run selects amend path instead of creating an additional commit |
-| STOR-04 | Workflow logic verification confirms amend path uses `git push --force-with-lease` |
+| STOR-02 | Workflow tests/dry-run checks verify output changes produce a daily digest commit with the standard subject format |
+| STOR-03 | Workflow tests/dry-run checks verify runs skip commit/push when processed URL count is zero or when no staged output changes exist |
+| STOR-04 | Workflow logic verification confirms the live path uses standard `git push` (no amend/force path) |
 
 ## Manual Smoke
 
@@ -28,7 +28,7 @@ created: 2026-03-15
    - digest arrives in Telegram,
    - one digest commit appears on remote.
 2. Send additional URLs same UTC day, run `workflow_dispatch` again:
-   - still one digest commit for that day (amended),
+   - a new digest commit appears only if new outputs are staged,
    - digest content reflects both runs.
 3. Run workflow on empty day (no new URLs):
    - no digest message,

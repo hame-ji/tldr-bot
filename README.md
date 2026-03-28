@@ -120,6 +120,8 @@ NotebookLM authentication is also required for YouTube summarization and Noteboo
 ## Documentation
 
 - `architecture.md` - architecture rationale, backend routing, failure model, and observability
+- `docs/operations.md` - operator playbook for common pipeline and provider failures
+- `docs/drift-register.md` - resolved high-risk contract drift records
 - `.planning/REQUIREMENTS.md` - requirement traceability
 - `.planning/ROADMAP.md` - phase-based implementation roadmap
 

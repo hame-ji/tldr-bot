@@ -9,12 +9,12 @@
 
 ## Phases
 
-- [ ] **Phase 1: Infrastructure & Bot Setup** - Repo scaffold, GitHub Secrets, verified bot token, and workflow that can push commits
-- [ ] **Phase 2: Telegram Polling Client** - Correct offset-based polling with state.json persistence and ALLOWED_CHAT_ID filtering
-- [ ] **Phase 3: Content Fetching** - URL classification, article extraction via trafilatura, timeout safety, and failure records
-- [ ] **Phase 4: OpenRouter Summarization** - AI summarization for article content with prompt file control and rate-limit resilience
+- [x] **Phase 1: Infrastructure & Bot Setup** - Repo scaffold, GitHub Secrets, verified bot token, and workflow that can push commits
+- [x] **Phase 2: Telegram Polling Client** - Correct offset-based polling with `state.json` persistence and `TELEGRAM_CHAT_ID` filtering
+- [x] **Phase 3: Content Fetching** - URL classification, article/PDF extraction, timeout safety, and failure records
+- [x] **Phase 4: Summarization Routing** - OpenRouter article summarization plus NotebookLM YouTube and fallback routing
 - [x] **Phase 5: Digest Generation & Delivery** - Daily digest assembled and chunked for Telegram delivery, with failure section and empty-day guard
-- [x] **Phase 6: Pipeline Orchestration & Git Integration** - Full pipeline wired via main.py, amend-or-create commit strategy, and end-to-end verified run
+- [x] **Phase 6: Pipeline Orchestration & Git Integration** - Full pipeline wired via main.py, create-only daily commit strategy, and end-to-end verified run
 
 ---
 
@@ -25,7 +25,7 @@
 | 1. Infrastructure & Bot Setup | 3/3 | Completed | 2026-03-15 |
 | 2. Telegram Polling Client | 2/2 | Completed | 2026-03-15 |
 | 3. Content Fetching | 2/2 | Completed | 2026-03-15 |
-| 4. OpenRouter Summarization | 2/2 | Completed | 2026-03-15 |
+| 4. Summarization Routing | 2/2 | Completed | 2026-03-15 |
 | 5. Digest Generation & Delivery | 2/2 | Completed | 2026-03-15 |
 | 6. Pipeline Orchestration & Git Integration | 2/2 | Completed | 2026-03-15 |
 
@@ -38,7 +38,7 @@
 **Depends on:** Nothing (first phase)
 **Requirements:** INFRA-01, INFRA-02, INFRA-03, INFRA-04, INFRA-05, INFRA-06, INFRA-07, BOT-01, BOT-02, BOT-03
 **Success Criteria** (what must be TRUE):
-  1. `data/`, `prompts/`, and `src/` directories exist in the repository and `requirements.txt` pins exact versions of all five dependencies
+  1. `data/`, `prompts/`, and `src/` directories exist in the repository and dependencies are pinned in `pyproject.toml` / `uv.lock`
   2. GitHub Secrets (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `OPENROUTER_API_KEY`) are set and the bot token is confirmed valid via a live BotFather test
   3. `digest.yml` workflow runs successfully (manually dispatched), authenticates with `GITHUB_TOKEN`, and can push a test commit to the repo
   4. `getUpdates` returns real messages (not an empty array), confirming no active webhook is blocking polling
@@ -54,31 +54,31 @@
 **Success Criteria** (what must be TRUE):
   1. Sending a URL to the bot and running the pipeline produces that URL in the extracted list; running the pipeline again does NOT re-produce the same URL (offset is correctly advanced)
   2. `state.json` in the repository root contains `last_update_id + 1` (not `last_update_id`) after a successful poll
-  3. Messages from a chat ID not matching `ALLOWED_CHAT_ID` are silently ignored and do not appear in the URL list
+  3. Messages from a chat ID not matching `TELEGRAM_CHAT_ID` are silently ignored and do not appear in the URL list
   4. URLs embedded in surrounding text (e.g., "check this out https://example.com good stuff") are correctly extracted by regex
 **Plans:** 2 plans
 - [x] `02-01-PLAN.md` — Implement Telegram polling client and state offset persistence
 - [x] `02-02-PLAN.md` — Add URL extraction/chat filtering tests and wire polling into entrypoint/CI
 
 ### Phase 3: Content Fetching
-**Goal:** The pipeline can classify incoming URLs, fetch and extract article content via trafilatura with mandatory timeouts, silently ignore YouTube URLs, and write a failure record for article fetch failures without aborting the pipeline.
+**Goal:** The pipeline can classify incoming URLs, fetch and extract article/PDF content with mandatory timeouts, return YouTube URLs as routeable inputs, and write a failure record for article fetch failures without aborting the pipeline.
 **Depends on:** Phase 2
 **Requirements:** FETCH-01, FETCH-02, FETCH-03, FETCH-04
 **Success Criteria** (what must be TRUE):
-  1. A valid article URL returns extracted main-body text (not HTML boilerplate); a YouTube URL is silently ignored and not passed to trafilatura
+  1. A valid article URL returns extracted main-body text (not HTML boilerplate); a YouTube URL is identified and routed without trafilatura extraction
   2. A URL that times out (or returns 403/paywall/empty content) produces a Markdown file in `data/failed/YYYY-MM-DD/slug.md` and the fetcher returns control to the caller — the pipeline does not abort
   3. All HTTP requests complete within the configured hard timeout (`timeout=(10, 30)`) — no request can hang indefinitely
 **Plans:** 2 plans
 - [x] `03-01-PLAN.md` — Implement URL classification and article extraction with hard timeouts
 - [x] `03-02-PLAN.md` — Add failure-record behavior and content fetcher tests
 
-### Phase 4: OpenRouter Summarization
-**Goal:** The pipeline can summarize article text via OpenRouter free models using prompt files, handle rate limits gracefully, and write each summary as a dated Markdown file.
+### Phase 4: Summarization Routing
+**Goal:** The pipeline can summarize article text via OpenRouter free models, summarize YouTube via NotebookLM, apply NotebookLM fallback for eligible article fetch failures, and write each summary as a dated Markdown file.
 **Depends on:** Phase 3
 **Requirements:** SUM-01, SUM-02, SUM-03, SUM-04, SUM-05
 **Success Criteria** (what must be TRUE):
   1. A real article URL produces a summary written to `data/sources/YYYY-MM-DD/slug.md` using the behavior defined in `prompts/summarize.txt`
-  2. Non-article URLs (including YouTube) are silently ignored and do not create summary or failure records
+  2. YouTube URLs are summarized via NotebookLM and written to `data/sources/`; backend errors write failure records in `data/failed/`
   3. When OpenRouter returns 429/rate-limit errors, the pipeline retries with backoff and model fallback and eventually succeeds (or writes to `data/failed/`) — it does not crash
   4. Changing `prompts/summarize.txt` changes the summary output without any code changes
 **Plans:** 2 plans
@@ -100,17 +100,17 @@
 - [x] `05-02-PLAN.md` — Add chunked Telegram delivery and empty-day no-send guard
 
 ### Phase 6: Pipeline Orchestration & Git Integration
-**Goal:** All modules are wired together through main.py with per-URL failure isolation; the GitHub Actions workflow commits all outputs using an amend-or-create-per-day strategy; and a complete end-to-end run (cron or manual) succeeds in the Actions environment.
+**Goal:** All modules are wired together through `main.py` with per-URL failure isolation; the GitHub Actions workflow commits all outputs with create-only daily commits when outputs change; and a complete end-to-end run (cron or manual) succeeds in the Actions environment.
 **Depends on:** Phase 5
 **Requirements:** STOR-01, STOR-02, STOR-03, STOR-04
 **Success Criteria** (what must be TRUE):
   1. A full pipeline run (send URLs → cron fires → digest delivered → commit pushed) completes successfully in GitHub Actions with a single commit containing all outputs
-  2. Running the pipeline twice on the same day (manual re-trigger) produces one amended commit — not two commits — and the digest reflects all URLs from both runs
-  3. `--force-with-lease` push succeeds after the amend; no force-push conflicts occur in the standard single-user workflow
+  2. Running the pipeline twice on the same day (manual re-trigger) creates a second daily commit only when new/staged outputs exist
+  3. Standard `git push` succeeds on output commits with no force-push path in the live workflow
   4. A URL that causes an unhandled exception in any module writes a failure record and allows the pipeline to continue processing remaining URLs
 **Plans:** 2 plans
 - [x] `06-01-PLAN.md` — Add orchestration run-outcome signaling and tests for commit gating
-- [x] `06-02-PLAN.md` — Implement workflow daily commit/amend strategy with `--force-with-lease` push
+- [x] `06-02-PLAN.md` — Implement workflow output persistence gates and finalize create-only commit/push behavior
 
 ---
 
@@ -158,4 +158,4 @@
 
 ---
 *Roadmap created: 2026-03-15*
-*Last updated: 2026-03-15*
+*Last updated: 2026-03-28 after truth-alignment refresh*

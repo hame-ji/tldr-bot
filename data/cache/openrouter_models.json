@@ -1,14 +1,12 @@
 {
-  "fetched_at": 1774512316.4657705,
+  "fetched_at": 1774859074.449516,
   "models": [
     "google/gemma-3-27b-it:free",
     "qwen/qwen3-next-80b-a3b-instruct:free",
     "meta-llama/llama-3.2-3b-instruct:free",
     "meta-llama/llama-3.3-70b-instruct:free",
     "qwen/qwen3-coder:free",
-    "qwen/qwen3-4b:free",
     "nousresearch/hermes-3-llama-3.1-405b:free",
-    "mistralai/mistral-small-3.1-24b-instruct:free",
     "liquid/lfm-2.5-1.2b-instruct:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
     "stepfun/step-3.5-flash:free",

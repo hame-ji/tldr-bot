@@ -35,11 +35,8 @@ This playbook covers the common failures for the live workflow in `.github/workf
 
 - Symptom: errors such as `notebooklm_auth_expired`, `youtube_source_failed`, or fallback failures.
 - Impact: YouTube and/or article fallback summaries fail; failure records are written.
-- Immediate action:
-  - Refresh NotebookLM auth material (`NOTEBOOKLM_STORAGE_STATE` secret or storage file source).
-  - Validate that storage state JSON is valid and current.
-  - Rerun once credentials are refreshed.
-- Recovery check: YouTube URLs produce `summary:youtube:...` log lines and source files in `data/sources/`.
+- Immediate action: execute `docs/runbooks/notebooklm-auth-renewal.md`.
+- Recovery check: runbook verification checks pass and incident exits as `recovered` or `escalated`.
 
 ### Empty-day or no-change commit skip
 

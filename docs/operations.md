@@ -7,7 +7,8 @@ This playbook covers the common failures for the live workflow in `.github/workf
 1. Open the latest `digest` workflow run in GitHub Actions.
 2. Check `Run pipeline entrypoint` step outcome and `/tmp/pipeline.log` artifact (uploaded on failure).
 3. Check `run_outcome:` and `run_metrics:` lines in pipeline logs.
-4. Check job summary warnings for extraction/history (non-blocking) failures.
+4. Check job summary values for `NotebookLM preflight status` and `NotebookLM auth failures`.
+5. Check job summary warnings for extraction/history (non-blocking) failures.
 
 ## Incident Playbooks
 
@@ -37,6 +38,23 @@ This playbook covers the common failures for the live workflow in `.github/workf
 - Impact: YouTube and/or article fallback summaries fail; failure records are written.
 - Immediate action: execute `docs/runbooks/notebooklm-auth-renewal.md`.
 - Recovery check: runbook verification checks pass and incident exits as `recovered` or `escalated`.
+
+#### NotebookLM auth incident lifecycle
+
+- Detect:
+  - `NotebookLM preflight status` is `auth_expired` or `misconfigured`, or
+  - `NotebookLM auth failures` is greater than `0`.
+- Acknowledge:
+  - Workflow warning annotation appears when `notebooklm_auth_incident=true`.
+- Remediate:
+  - Run `notebooklm login` locally.
+  - Update `NOTEBOOKLM_STORAGE_STATE` secret with fresh storage state JSON.
+- Validate:
+  - Manual rerun reports `NotebookLM preflight status: ok` and `NotebookLM auth failures: 0`.
+- Replay recovery:
+  - Run manual dispatch of `replay-notebooklm.yml`.
+  - Optionally cap attempts with `replay_limit` and use `dry_run=true` for no-push rehearsal.
+  - Confirm summary shows replay attempted/recovered/pending counts.
 
 ### Empty-day or no-change commit skip
 

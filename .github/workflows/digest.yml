@@ -34,6 +34,7 @@ jobs:
       OPENROUTER_MAX_BACKOFF_SECONDS: "180"
       OPENROUTER_MODELS_CACHE_TTL_SECONDS: "21600"
       NOTEBOOKLM_STORAGE_STATE: ${{ secrets.NOTEBOOKLM_STORAGE_STATE }}
+      NOTEBOOKLM_PREFLIGHT_MODE: "enforce"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -80,6 +81,11 @@ jobs:
         if: ${{ always() }}
         continue-on-error: true
         run: uv run python -m scripts.extract_pipeline_outputs /tmp/pipeline.log
+
+      - name: Flag NotebookLM auth incident
+        if: ${{ always() && steps.extract_outputs.outputs.notebooklm_auth_incident == 'true' }}
+        run: |
+          echo "::warning::NotebookLM auth incident detected. Refresh NOTEBOOKLM_STORAGE_STATE using notebooklm login and rerun the workflow."
 
       - name: Commit and push pipeline outputs
         id: persist_outputs
@@ -144,6 +150,11 @@ jobs:
           FETCH_OK_ARTICLE_COUNT: ${{ steps.extract_outputs.outputs.fetch_ok_article_count || 'unknown' }}
           FETCH_OK_YOUTUBE_COUNT: ${{ steps.extract_outputs.outputs.fetch_ok_youtube_count || 'unknown' }}
           FETCH_FAILED_COUNT: ${{ steps.extract_outputs.outputs.fetch_failed_count || 'unknown' }}
+          NOTEBOOKLM_PREFLIGHT_STATUS: ${{ steps.extract_outputs.outputs.notebooklm_preflight_status || 'unknown' }}
+          NOTEBOOKLM_AUTH_FAILURE_COUNT: ${{ steps.extract_outputs.outputs.notebooklm_auth_failure_count || 'unknown' }}
+          NOTEBOOKLM_AUTH_INCIDENT: ${{ steps.extract_outputs.outputs.notebooklm_auth_incident || 'unknown' }}
+          NOTEBOOKLM_CIRCUIT_BREAKER_SKIPPED_COUNT: ${{ steps.extract_outputs.outputs.notebooklm_circuit_breaker_skipped_count || 'unknown' }}
+          REPLAY_QUEUED_COUNT: ${{ steps.extract_outputs.outputs.replay_queued_count || 'unknown' }}
           DIGEST_CREATED: ${{ steps.extract_outputs.outputs.digest_created || 'unknown' }}
           COMMIT_STATUS: ${{ steps.persist_outputs.outputs.commit_status || 'not_required' }}
           EXTRACT_OUTPUTS_RESULT: ${{ steps.extract_outputs.outcome || 'unknown' }}
@@ -159,8 +170,15 @@ jobs:
             echo "- Seconds per processed URL: ${SECONDS_PER_PROCESSED_URL}"
             echo "- Source mix (fetch ok article/youtube): ${FETCH_OK_ARTICLE_COUNT}/${FETCH_OK_YOUTUBE_COUNT}"
             echo "- Fetch failures: ${FETCH_FAILED_COUNT}"
+            echo "- NotebookLM preflight status: ${NOTEBOOKLM_PREFLIGHT_STATUS}"
+            echo "- NotebookLM auth failures: ${NOTEBOOKLM_AUTH_FAILURE_COUNT}"
+            echo "- NotebookLM circuit-breaker skipped: ${NOTEBOOKLM_CIRCUIT_BREAKER_SKIPPED_COUNT}"
+            echo "- Replay queued this run: ${REPLAY_QUEUED_COUNT}"
             echo "- Digest created: ${DIGEST_CREATED}"
             echo "- Output persistence: ${COMMIT_STATUS}"
+            if [ "${NOTEBOOKLM_AUTH_INCIDENT}" = "true" ]; then
+              echo "- Warning: NotebookLM credentials look expired/misconfigured; refresh NOTEBOOKLM_STORAGE_STATE and rerun."
+            fi
             if [ "${EXTRACT_OUTPUTS_RESULT}" != "success" ]; then
               echo "- Warning: telemetry output extraction failed (non-blocking)"
             fi

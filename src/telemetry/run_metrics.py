@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
-from typing import Any, Optional
+from typing import Any, Mapping, Optional
 
 
 @dataclass(frozen=True)
@@ -15,6 +15,12 @@ class RunMetrics:
     fetch_ok_article_count: int
     fetch_ok_youtube_count: int
     fetch_failed_count: int
+    notebooklm_work_item_count: int
+    notebooklm_preflight_status: str
+    notebooklm_circuit_breaker_skipped_count: int
+    youtube_auth_failure_count: int
+    notebooklm_auth_failure_count: int
+    replay_queued_count: int
     pipeline_seconds: float
     seconds_per_processed_url: Optional[float]
 
@@ -22,20 +28,36 @@ class RunMetrics:
 def build_run_metrics(
     digest_date: str,
     fetch_results: list[dict[str, Any]],
-    outcome: dict[str, Any],
+    outcome: Mapping[str, Any],
     pipeline_seconds: float,
 ) -> RunMetrics:
     fetch_ok_article_count = sum(
-        1 for item in fetch_results if item.get("status") == "ok" and item.get("kind") == "article"
+        1
+        for item in fetch_results
+        if item.get("status") == "ok" and item.get("kind") == "article"
     )
     fetch_ok_youtube_count = sum(
-        1 for item in fetch_results if item.get("status") == "ok" and item.get("kind") == "youtube"
+        1
+        for item in fetch_results
+        if item.get("status") == "ok" and item.get("kind") == "youtube"
     )
-    fetch_failed_count = sum(1 for item in fetch_results if item.get("status") == "failed")
+    fetch_failed_count = sum(
+        1 for item in fetch_results if item.get("status") == "failed"
+    )
 
     processed_urls = int(outcome.get("processed_urls", 0))
     summary_ok_count = int(outcome.get("summary_ok_count", 0))
     summary_failed_count = int(outcome.get("summary_failed_count", 0))
+    notebooklm_work_item_count = int(outcome.get("notebooklm_work_item_count", 0))
+    notebooklm_preflight_status = str(
+        outcome.get("notebooklm_preflight_status", "unknown")
+    )
+    notebooklm_circuit_breaker_skipped_count = int(
+        outcome.get("notebooklm_circuit_breaker_skipped_count", 0)
+    )
+    youtube_auth_failure_count = int(outcome.get("youtube_auth_failure_count", 0))
+    notebooklm_auth_failure_count = int(outcome.get("notebooklm_auth_failure_count", 0))
+    replay_queued_count = int(outcome.get("replay_queued_count", 0))
 
     seconds_per_processed_url: Optional[float]
     if processed_urls > 0:
@@ -52,6 +74,12 @@ def build_run_metrics(
         fetch_ok_article_count=fetch_ok_article_count,
         fetch_ok_youtube_count=fetch_ok_youtube_count,
         fetch_failed_count=fetch_failed_count,
+        notebooklm_work_item_count=notebooklm_work_item_count,
+        notebooklm_preflight_status=notebooklm_preflight_status,
+        notebooklm_circuit_breaker_skipped_count=notebooklm_circuit_breaker_skipped_count,
+        youtube_auth_failure_count=youtube_auth_failure_count,
+        notebooklm_auth_failure_count=notebooklm_auth_failure_count,
+        replay_queued_count=replay_queued_count,
         pipeline_seconds=pipeline_seconds,
         seconds_per_processed_url=seconds_per_processed_url,
     )

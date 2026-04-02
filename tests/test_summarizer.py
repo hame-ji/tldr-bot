@@ -17,7 +17,13 @@ from src.summarizer import (
     summarize_item,
     summarize_items,
 )
-from src.summarization.notebooklm_backend import YOUTUBE_AUTH_EXPIRED, YOUTUBE_SOURCE_FAILED, YouTubeSummaryError
+from src.summarization.notebooklm_backend import (
+    NOTEBOOKLM_PREFLIGHT_AUTH_EXPIRED,
+    NOTEBOOKLM_PREFLIGHT_MISCONFIGURED,
+    YOUTUBE_AUTH_EXPIRED,
+    YOUTUBE_SOURCE_FAILED,
+    YouTubeSummaryError,
+)
 
 
 @contextlib.contextmanager
@@ -49,7 +55,9 @@ class _FakeSummarizer:
 class SummarizerTests(unittest.TestCase):
     def test_source_output_path_uses_date_and_slug(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
-            path = _source_output_path("https://example.com/a/b", date(2026, 3, 15), base_dir=tmpdir)
+            path = _source_output_path(
+                "https://example.com/a/b", date(2026, 3, 15), base_dir=tmpdir
+            )
             self.assertIn("2026-03-15", str(path))
             self.assertTrue(path.name.endswith(".md"))
 
@@ -57,7 +65,12 @@ class SummarizerTests(unittest.TestCase):
         fake = _FakeSummarizer()
         with tempfile.TemporaryDirectory() as tmpdir:
             result = summarize_item(
-                item={"status": "ok", "kind": "article", "url": "https://example.com/x", "content": "body"},
+                item={
+                    "status": "ok",
+                    "kind": "article",
+                    "url": "https://example.com/x",
+                    "content": "body",
+                },
                 summarizer=fake,
                 run_date=date(2026, 3, 15),
                 sources_base_dir=tmpdir,
@@ -90,7 +103,12 @@ class SummarizerTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             result = summarize_item(
-                item={"status": "ok", "kind": "article", "url": "https://example.com/x", "content": "body"},
+                item={
+                    "status": "ok",
+                    "kind": "article",
+                    "url": "https://example.com/x",
+                    "content": "body",
+                },
                 summarizer=_Broken(),
                 run_date=date(2026, 3, 15),
                 failed_base_dir=tmpdir,
@@ -99,12 +117,16 @@ class SummarizerTests(unittest.TestCase):
             self.assertTrue(Path(result["failure_path"]).exists())
 
     @patch("src.summarizer.summarize_youtube_with_notebooklm")
-    def test_summarize_items_does_not_require_key_when_no_articles(self, mock_summarize_youtube) -> None:
+    def test_summarize_items_does_not_require_key_when_no_articles(
+        self, mock_summarize_youtube
+    ) -> None:
         mock_summarize_youtube.return_value = "youtube summary"
         old_key = os.environ.pop("OPENROUTER_API_KEY", None)
         try:
             results = summarize_items(
-                items=[{"status": "ok", "kind": "youtube", "url": "https://youtu.be/abc"}],
+                items=[
+                    {"status": "ok", "kind": "youtube", "url": "https://youtu.be/abc"}
+                ],
                 run_date=date(2026, 3, 15),
             )
         finally:
@@ -117,7 +139,7 @@ class SummarizerTests(unittest.TestCase):
     @patch("src.summarizer.OpenRouterSummarizer")
     def test_summarize_items_uses_openrouter_env(self, mock_cls) -> None:
         fake = _FakeSummarizer()
-        mock_cls.from_config.return_value =  fake
+        mock_cls.from_config.return_value = fake
 
         with tempfile.TemporaryDirectory() as tmpdir:
             env = {
@@ -133,7 +155,14 @@ class SummarizerTests(unittest.TestCase):
             }
             with _override_env(env):
                 results = summarize_items(
-                    items=[{"status": "ok", "kind": "article", "url": "https://example.com", "content": "hello"}],
+                    items=[
+                        {
+                            "status": "ok",
+                            "kind": "article",
+                            "url": "https://example.com",
+                            "content": "hello",
+                        }
+                    ],
                     run_date=date(2026, 3, 15),
                     sources_base_dir=tmpdir,
                     failed_base_dir=tmpdir,
@@ -150,14 +179,24 @@ class SummarizerTests(unittest.TestCase):
             self.assertEqual(config.max_retries, 7)
             self.assertAlmostEqual(config.initial_backoff_seconds, 6.0)
             self.assertAlmostEqual(config.max_backoff_seconds, 90.0)
-            self.assertEqual(config.models_cache_path, str(Path(tmpdir) / "models.json"))
+            self.assertEqual(
+                config.models_cache_path, str(Path(tmpdir) / "models.json")
+            )
             self.assertEqual(config.models_cache_ttl_seconds, 123)
 
     def test_order_models_prefers_user_picks_then_quality(self) -> None:
         models = [
-            {"id": "vendor/basic-model", "context_length": 4096, "pricing": {"prompt": "0", "completion": "0"}},
+            {
+                "id": "vendor/basic-model",
+                "context_length": 4096,
+                "pricing": {"prompt": "0", "completion": "0"},
+            },
             {"id": "vendor/pro-model:free", "context_length": 32768},
-            {"id": "vendor/paid-model", "context_length": 32768, "pricing": {"prompt": "0.1", "completion": "0.1"}},
+            {
+                "id": "vendor/paid-model",
+                "context_length": 32768,
+                "pricing": {"prompt": "0.1", "completion": "0.1"},
+            },
         ]
 
         ordered = _order_models(models, preferred_models=["vendor/basic-model"])
@@ -168,7 +207,9 @@ class SummarizerTests(unittest.TestCase):
 
     @patch("src.summarizer.summarize_youtube_with_notebooklm")
     @patch("src.summarizer.OpenRouterSummarizer")
-    def test_summarize_items_routes_mixed_batch_by_kind(self, mock_openrouter_cls, mock_summarize_youtube) -> None:
+    def test_summarize_items_routes_mixed_batch_by_kind(
+        self, mock_openrouter_cls, mock_summarize_youtube
+    ) -> None:
         class _ArticleOnly:
             def summarize_article(self, url: str, content: str) -> str:
                 return "article via openrouter"
@@ -180,8 +221,17 @@ class SummarizerTests(unittest.TestCase):
             with _override_env({"OPENROUTER_API_KEY": "key"}):
                 results = summarize_items(
                     items=[
-                        {"status": "ok", "kind": "article", "url": "https://example.com/a", "content": "body"},
-                        {"status": "ok", "kind": "youtube", "url": "https://youtu.be/abc"},
+                        {
+                            "status": "ok",
+                            "kind": "article",
+                            "url": "https://example.com/a",
+                            "content": "body",
+                        },
+                        {
+                            "status": "ok",
+                            "kind": "youtube",
+                            "url": "https://youtu.be/abc",
+                        },
                     ],
                     run_date=date(2026, 3, 15),
                     sources_base_dir=tmpdir,
@@ -194,15 +244,23 @@ class SummarizerTests(unittest.TestCase):
             self.assertEqual(results[1]["status"], "ok")
             self.assertEqual(results[1]["kind"], "youtube")
             mock_openrouter_cls.from_config.assert_called_once()
-            mock_summarize_youtube.assert_called_once_with(url="https://youtu.be/abc", prompt=ANY)
+            mock_summarize_youtube.assert_called_once_with(
+                url="https://youtu.be/abc", prompt=ANY
+            )
 
     @patch("src.summarizer.summarize_youtube_with_notebooklm")
-    def test_summarize_items_youtube_auth_failure_writes_failure(self, mock_summarize_youtube) -> None:
-        mock_summarize_youtube.side_effect = YouTubeSummaryError(YOUTUBE_AUTH_EXPIRED, "session expired")
+    def test_summarize_items_youtube_auth_failure_writes_failure(
+        self, mock_summarize_youtube
+    ) -> None:
+        mock_summarize_youtube.side_effect = YouTubeSummaryError(
+            YOUTUBE_AUTH_EXPIRED, "session expired"
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             results = summarize_items(
-                items=[{"status": "ok", "kind": "youtube", "url": "https://youtu.be/auth"}],
+                items=[
+                    {"status": "ok", "kind": "youtube", "url": "https://youtu.be/auth"}
+                ],
                 run_date=date(2026, 3, 15),
                 sources_base_dir=tmpdir,
                 failed_base_dir=tmpdir,
@@ -214,12 +272,22 @@ class SummarizerTests(unittest.TestCase):
             self.assertTrue(Path(results[0]["failure_path"]).exists())
 
     @patch("src.summarizer.summarize_youtube_with_notebooklm")
-    def test_summarize_items_youtube_source_failure_writes_failure(self, mock_summarize_youtube) -> None:
-        mock_summarize_youtube.side_effect = YouTubeSummaryError(YOUTUBE_SOURCE_FAILED, "processing failed")
+    def test_summarize_items_youtube_source_failure_writes_failure(
+        self, mock_summarize_youtube
+    ) -> None:
+        mock_summarize_youtube.side_effect = YouTubeSummaryError(
+            YOUTUBE_SOURCE_FAILED, "processing failed"
+        )
 
         with tempfile.TemporaryDirectory() as tmpdir:
             results = summarize_items(
-                items=[{"status": "ok", "kind": "youtube", "url": "https://youtu.be/source"}],
+                items=[
+                    {
+                        "status": "ok",
+                        "kind": "youtube",
+                        "url": "https://youtu.be/source",
+                    }
+                ],
                 run_date=date(2026, 3, 15),
                 sources_base_dir=tmpdir,
                 failed_base_dir=tmpdir,
@@ -231,7 +299,9 @@ class SummarizerTests(unittest.TestCase):
             self.assertTrue(Path(results[0]["failure_path"]).exists())
 
     @patch("src.summarizer.summarize_url_with_notebooklm")
-    def test_failed_article_uses_notebooklm_fallback_by_default(self, mock_summarize_url) -> None:
+    def test_failed_article_uses_notebooklm_fallback_by_default(
+        self, mock_summarize_url
+    ) -> None:
         mock_summarize_url.return_value = "article fallback summary"
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -253,11 +323,16 @@ class SummarizerTests(unittest.TestCase):
 
         self.assertEqual(results[0]["status"], "ok")
         self.assertEqual(results[0]["kind"], "article")
-        mock_summarize_url.assert_called_once_with(url="https://example.com/blocked", prompt=ANY)
+        mock_summarize_url.assert_called_once_with(
+            url="https://example.com/blocked", prompt=ANY
+        )
 
     @patch("src.summarizer.summarize_url_with_notebooklm")
     def test_failed_article_fallback_can_be_disabled(self, mock_summarize_url) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir, _override_env({"NOTEBOOKLM_ARTICLE_FALLBACK_ENABLED": "false"}):
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            _override_env({"NOTEBOOKLM_ARTICLE_FALLBACK_ENABLED": "false"}),
+        ):
             item = {
                 "status": "failed",
                 "kind": "article",
@@ -276,6 +351,217 @@ class SummarizerTests(unittest.TestCase):
         self.assertEqual(results[0]["status"], "failed")
         self.assertEqual(results[0]["url"], item["url"])
         mock_summarize_url.assert_not_called()
+
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    @patch("src.summarizer.check_notebooklm_auth")
+    def test_preflight_observe_mode_records_status_but_keeps_processing(
+        self,
+        mock_check_notebooklm_auth,
+        mock_summarize_youtube,
+    ) -> None:
+        mock_check_notebooklm_auth.return_value = NOTEBOOKLM_PREFLIGHT_AUTH_EXPIRED
+        mock_summarize_youtube.return_value = "youtube summary"
+
+        diagnostics: dict[str, object] = {}
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            _override_env({"NOTEBOOKLM_PREFLIGHT_MODE": "observe"}),
+        ):
+            results = summarize_items(
+                items=[
+                    {
+                        "status": "ok",
+                        "kind": "youtube",
+                        "url": "https://youtu.be/observe",
+                    }
+                ],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+                diagnostics=diagnostics,
+            )
+
+        self.assertEqual(results[0]["status"], "ok")
+        self.assertEqual(diagnostics["notebooklm_work_item_count"], 1)
+        self.assertEqual(
+            diagnostics["notebooklm_preflight_status"],
+            NOTEBOOKLM_PREFLIGHT_AUTH_EXPIRED,
+        )
+        mock_summarize_youtube.assert_called_once()
+
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    @patch("src.summarizer.check_notebooklm_auth")
+    def test_preflight_enforce_mode_short_circuits_notebooklm_work(
+        self,
+        mock_check_notebooklm_auth,
+        mock_summarize_youtube,
+    ) -> None:
+        mock_check_notebooklm_auth.return_value = NOTEBOOKLM_PREFLIGHT_AUTH_EXPIRED
+        diagnostics: dict[str, object] = {}
+
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            _override_env({"NOTEBOOKLM_PREFLIGHT_MODE": "enforce"}),
+        ):
+            results = summarize_items(
+                items=[
+                    {
+                        "status": "ok",
+                        "kind": "youtube",
+                        "url": "https://youtu.be/enforce",
+                    }
+                ],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+                diagnostics=diagnostics,
+            )
+
+        self.assertEqual(results[0]["status"], "failed")
+        self.assertEqual(results[0]["reason"], YOUTUBE_AUTH_EXPIRED)
+        self.assertIn("preflight failed", results[0]["error"])
+        self.assertTrue(results[0]["failure_path"].endswith(".md"))
+        self.assertEqual(
+            diagnostics["notebooklm_preflight_status"],
+            NOTEBOOKLM_PREFLIGHT_AUTH_EXPIRED,
+        )
+        mock_summarize_youtube.assert_not_called()
+
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    @patch("src.summarizer.check_notebooklm_auth")
+    def test_preflight_off_mode_skips_preflight_check(
+        self,
+        mock_check_notebooklm_auth,
+        mock_summarize_youtube,
+    ) -> None:
+        mock_check_notebooklm_auth.return_value = NOTEBOOKLM_PREFLIGHT_MISCONFIGURED
+        mock_summarize_youtube.return_value = "youtube summary"
+        diagnostics: dict[str, object] = {}
+
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            _override_env({"NOTEBOOKLM_PREFLIGHT_MODE": "off"}),
+        ):
+            results = summarize_items(
+                items=[
+                    {"status": "ok", "kind": "youtube", "url": "https://youtu.be/off"}
+                ],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+                diagnostics=diagnostics,
+            )
+
+        self.assertEqual(results[0]["status"], "ok")
+        self.assertEqual(diagnostics["notebooklm_preflight_status"], "skipped")
+        mock_check_notebooklm_auth.assert_not_called()
+
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    @patch("src.summarizer.check_notebooklm_auth")
+    @patch("src.summarizer.enqueue_notebooklm_auth_failure")
+    def test_preflight_enforce_mode_opens_runtime_auth_circuit_breaker(
+        self,
+        mock_enqueue_replay,
+        mock_check_notebooklm_auth,
+        mock_summarize_youtube,
+    ) -> None:
+        mock_enqueue_replay.return_value = True
+        mock_check_notebooklm_auth.return_value = "ok"
+
+        def _side_effect(url: str, prompt: str) -> str:
+            if url.endswith("one"):
+                raise YouTubeSummaryError(
+                    "youtube_auth_expired", "Authentication expired"
+                )
+            return "should not execute"
+
+        mock_summarize_youtube.side_effect = _side_effect
+
+        diagnostics: dict[str, object] = {}
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            _override_env({"NOTEBOOKLM_PREFLIGHT_MODE": "enforce"}),
+        ):
+            results = summarize_items(
+                items=[
+                    {"status": "ok", "kind": "youtube", "url": "https://youtu.be/one"},
+                    {"status": "ok", "kind": "youtube", "url": "https://youtu.be/two"},
+                    {
+                        "status": "ok",
+                        "kind": "youtube",
+                        "url": "https://youtu.be/three",
+                    },
+                ],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+                diagnostics=diagnostics,
+            )
+
+        self.assertEqual(len(results), 3)
+        self.assertEqual(results[0]["reason"], "youtube_auth_expired")
+        self.assertIn("circuit breaker", results[1]["error"])
+        self.assertIn("circuit breaker", results[2]["error"])
+        self.assertEqual(
+            diagnostics["notebooklm_circuit_breaker_skipped_count"],
+            2,
+        )
+        self.assertEqual(diagnostics["replay_queued_count"], 3)
+        self.assertEqual(mock_summarize_youtube.call_count, 1)
+
+    @patch("src.summarizer._FUTURE_TIMEOUT_SECONDS", 0.01)
+    @patch("src.summarizer.summarize_item")
+    @patch("src.summarizer.check_notebooklm_auth")
+    def test_preflight_enforce_mode_keeps_per_item_timeout(
+        self,
+        mock_check_notebooklm_auth,
+        mock_summarize_item,
+    ) -> None:
+        mock_check_notebooklm_auth.return_value = "ok"
+
+        def _side_effect(
+            item,
+            summarizer,
+            run_date,
+            sources_base_dir="data/sources",
+            failed_base_dir="data/failed",
+        ):
+            if item["url"].endswith("/slow"):
+                time.sleep(0.05)
+                return {
+                    "status": "ok",
+                    "kind": "youtube",
+                    "url": item["url"],
+                    "summary_path": "slow.md",
+                }
+            return {
+                "status": "ok",
+                "kind": "youtube",
+                "url": item["url"],
+                "summary_path": "fast.md",
+            }
+
+        mock_summarize_item.side_effect = _side_effect
+
+        diagnostics: dict[str, object] = {}
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            _override_env({"NOTEBOOKLM_PREFLIGHT_MODE": "enforce"}),
+        ):
+            results = summarize_items(
+                items=[
+                    {"status": "ok", "kind": "youtube", "url": "https://youtu.be/slow"},
+                    {"status": "ok", "kind": "youtube", "url": "https://youtu.be/fast"},
+                ],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+                diagnostics=diagnostics,
+            )
+
+        self.assertEqual(results[0]["status"], "failed")
+        self.assertIn("timed out", results[0]["error"])
+        self.assertEqual(results[1]["status"], "ok")
 
 
 class ClampConcurrencyTests(unittest.TestCase):
@@ -305,9 +591,19 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
         fake = _FakeSummarizer()
         mock_cls.from_config.return_value = fake
 
-        with tempfile.TemporaryDirectory() as tmpdir, _override_env({"OPENROUTER_API_KEY": "key"}):
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            _override_env({"OPENROUTER_API_KEY": "key"}),
+        ):
             results = summarize_items(
-                items=[{"status": "ok", "kind": "article", "url": "https://example.com/seq", "content": "body"}],
+                items=[
+                    {
+                        "status": "ok",
+                        "kind": "article",
+                        "url": "https://example.com/seq",
+                        "content": "body",
+                    }
+                ],
                 run_date=date(2026, 3, 15),
                 sources_base_dir=tmpdir,
                 failed_base_dir=tmpdir,
@@ -319,7 +615,9 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
 
     @patch("src.summarizer.summarize_youtube_with_notebooklm")
     @patch("src.summarizer.OpenRouterSummarizer")
-    def test_concurrent_articles_and_youtube_run_in_parallel(self, mock_cls, mock_yt) -> None:
+    def test_concurrent_articles_and_youtube_run_in_parallel(
+        self, mock_cls, mock_yt
+    ) -> None:
         """With concurrency > 1, articles and youtube should overlap."""
         call_log: list[tuple[str, float]] = []
         lock = threading.Lock()
@@ -352,9 +650,19 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir, _override_env(env_vars):
             results = summarize_items(
                 items=[
-                    {"status": "ok", "kind": "article", "url": "https://example.com/a1", "content": "body1"},
+                    {
+                        "status": "ok",
+                        "kind": "article",
+                        "url": "https://example.com/a1",
+                        "content": "body1",
+                    },
                     {"status": "ok", "kind": "youtube", "url": "https://youtu.be/v1"},
-                    {"status": "ok", "kind": "article", "url": "https://example.com/a2", "content": "body2"},
+                    {
+                        "status": "ok",
+                        "kind": "article",
+                        "url": "https://example.com/a2",
+                        "content": "body2",
+                    },
                     {"status": "ok", "kind": "youtube", "url": "https://youtu.be/v2"},
                 ],
                 run_date=date(2026, 3, 15),
@@ -377,6 +685,7 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
     @patch("src.summarizer.OpenRouterSummarizer")
     def test_order_preservation_with_mixed_kinds(self, mock_cls, mock_yt) -> None:
         """Results must be returned in original input order regardless of completion order."""
+
         class _ArticleOnly:
             def summarize_article(self, url: str, content: str) -> str:
                 return "article:" + url
@@ -393,10 +702,26 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir, _override_env(env_vars):
             items = [
                 {"status": "ok", "kind": "youtube", "url": "https://youtu.be/first"},
-                {"status": "ok", "kind": "article", "url": "https://example.com/second", "content": "b"},
+                {
+                    "status": "ok",
+                    "kind": "article",
+                    "url": "https://example.com/second",
+                    "content": "b",
+                },
                 {"status": "ok", "kind": "youtube", "url": "https://youtu.be/third"},
-                {"status": "ok", "kind": "article", "url": "https://example.com/fourth", "content": "d"},
-                {"status": "failed", "kind": "article", "url": "https://example.com/fifth", "error": "e", "failure_path": "x"},
+                {
+                    "status": "ok",
+                    "kind": "article",
+                    "url": "https://example.com/fourth",
+                    "content": "d",
+                },
+                {
+                    "status": "failed",
+                    "kind": "article",
+                    "url": "https://example.com/fifth",
+                    "error": "e",
+                    "failure_path": "x",
+                },
             ]
             results = summarize_items(
                 items=items,
@@ -421,6 +746,7 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
     @patch("src.summarizer.OpenRouterSummarizer")
     def test_failure_isolation_between_backends(self, mock_cls, mock_yt) -> None:
         """A YouTube failure must not affect article results, and vice versa."""
+
         class _WorkingArticle:
             def summarize_article(self, url: str, content: str) -> str:
                 return "article ok"
@@ -428,10 +754,18 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
         mock_cls.from_config.return_value = _WorkingArticle()
         mock_yt.side_effect = RuntimeError("notebooklm crashed")
 
-        with tempfile.TemporaryDirectory() as tmpdir, _override_env({"OPENROUTER_API_KEY": "key"}):
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            _override_env({"OPENROUTER_API_KEY": "key"}),
+        ):
             results = summarize_items(
                 items=[
-                    {"status": "ok", "kind": "article", "url": "https://example.com/good", "content": "body"},
+                    {
+                        "status": "ok",
+                        "kind": "article",
+                        "url": "https://example.com/good",
+                        "content": "body",
+                    },
                     {"status": "ok", "kind": "youtube", "url": "https://youtu.be/bad"},
                 ],
                 run_date=date(2026, 3, 15),
@@ -448,8 +782,11 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
 
     @patch("src.summarizer.summarize_youtube_with_notebooklm")
     @patch("src.summarizer.OpenRouterSummarizer")
-    def test_failure_isolation_article_fails_youtube_succeeds(self, mock_cls, mock_yt) -> None:
+    def test_failure_isolation_article_fails_youtube_succeeds(
+        self, mock_cls, mock_yt
+    ) -> None:
         """Article failure must not affect YouTube results."""
+
         class _BrokenArticle:
             def summarize_article(self, url: str, content: str) -> str:
                 raise RuntimeError("openrouter crashed")
@@ -457,11 +794,19 @@ class ConcurrencySummarizeItemsTests(unittest.TestCase):
         mock_cls.from_config.return_value = _BrokenArticle()
         mock_yt.return_value = "youtube ok"
 
-        with tempfile.TemporaryDirectory() as tmpdir, _override_env({"OPENROUTER_API_KEY": "key"}):
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            _override_env({"OPENROUTER_API_KEY": "key"}),
+        ):
             results = summarize_items(
                 items=[
                     {"status": "ok", "kind": "youtube", "url": "https://youtu.be/good"},
-                    {"status": "ok", "kind": "article", "url": "https://example.com/bad", "content": "body"},
+                    {
+                        "status": "ok",
+                        "kind": "article",
+                        "url": "https://example.com/bad",
+                        "content": "body",
+                    },
                 ],
                 run_date=date(2026, 3, 15),
                 sources_base_dir=tmpdir,
@@ -509,7 +854,10 @@ class OpenRouterThreadSafetyTests(unittest.TestCase):
         self.assertEqual(len(start_times), 4)
 
         ordered_starts = sorted(start_times)
-        intervals = [ordered_starts[idx + 1] - ordered_starts[idx] for idx in range(len(ordered_starts) - 1)]
+        intervals = [
+            ordered_starts[idx + 1] - ordered_starts[idx]
+            for idx in range(len(ordered_starts) - 1)
+        ]
         min_interval = min(intervals)
         self.assertGreaterEqual(
             min_interval,
@@ -562,14 +910,32 @@ class SummarizeItemsTimeoutTests(unittest.TestCase):
     @patch("src.summarizer._FUTURE_TIMEOUT_SECONDS", 0.01)
     @patch("src.summarizer.summarize_item")
     @patch("src.summarizer.OpenRouterSummarizer")
-    def test_timeout_isolated_to_single_item(self, mock_cls, mock_summarize_item) -> None:
+    def test_timeout_isolated_to_single_item(
+        self, mock_cls, mock_summarize_item
+    ) -> None:
         mock_cls.from_config.return_value = _FakeSummarizer()
 
-        def summarize_side_effect(item, summarizer, run_date, sources_base_dir="data/sources", failed_base_dir="data/failed"):
+        def summarize_side_effect(
+            item,
+            summarizer,
+            run_date,
+            sources_base_dir="data/sources",
+            failed_base_dir="data/failed",
+        ):
             if item["url"].endswith("/slow"):
                 time.sleep(0.05)
-                return {"status": "ok", "kind": "article", "url": item["url"], "summary_path": "slow.md"}
-            return {"status": "ok", "kind": item["kind"], "url": item["url"], "summary_path": "fast.md"}
+                return {
+                    "status": "ok",
+                    "kind": "article",
+                    "url": item["url"],
+                    "summary_path": "slow.md",
+                }
+            return {
+                "status": "ok",
+                "kind": item["kind"],
+                "url": item["url"],
+                "summary_path": "fast.md",
+            }
 
         mock_summarize_item.side_effect = summarize_side_effect
 
@@ -581,8 +947,18 @@ class SummarizeItemsTimeoutTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir, _override_env(env_vars):
             results = summarize_items(
                 items=[
-                    {"status": "ok", "kind": "article", "url": "https://example.com/slow", "content": "body"},
-                    {"status": "ok", "kind": "article", "url": "https://example.com/fast", "content": "body"},
+                    {
+                        "status": "ok",
+                        "kind": "article",
+                        "url": "https://example.com/slow",
+                        "content": "body",
+                    },
+                    {
+                        "status": "ok",
+                        "kind": "article",
+                        "url": "https://example.com/fast",
+                        "content": "body",
+                    },
                 ],
                 run_date=date(2026, 3, 15),
                 sources_base_dir=tmpdir,

@@ -1,8 +1,8 @@
 # tests/
 
-Last-Reviewed-Date: 2026-03-23
-Last-Reviewed-Commit: 256a78a
-Review-Note: Added run-history regression coverage for comparable-run filtering, skip aggregates, and updated summary entrypoint output.
+Last-Reviewed-Date: 2026-04-02
+Last-Reviewed-Commit: adb166d
+Review-Note: Added preflight outer-timeout regression test proving check_notebooklm_auth returns backend_error when the async call hangs indefinitely.
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

@@ -1,8 +1,8 @@
 # .github/ and scripts/
 
 Last-Reviewed-Date: 2026-04-01
-Last-Reviewed-Commit: a3f39ea
-Review-Note: Replay workflow shares digest-pipeline concurrency and NotebookLM preflight is now timeout-bounded to avoid stalled runs.
+Last-Reviewed-Commit: 680150e
+Review-Note: Digest and replay workflows now form data-plane/control-plane split with shared concurrency serialization and timeout-bounded NotebookLM preflight.
 
 - `ci.yml`: runs `unittest discover` on push/PR. Python 3.11 + uv. No secrets needed.
 - `digest.yml`: daily 7am UTC cron + manual trigger. Validates Telegram creds, runs pipeline via `uv run python -m src`, extracts outputs in a separate module step, and treats telemetry/history failures as non-blocking while skipping empty-day commits.

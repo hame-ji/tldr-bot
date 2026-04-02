@@ -39,6 +39,12 @@ class PipelineOutcome(TypedDict):
     processed_urls: int
     summary_ok_count: int
     summary_failed_count: int
+    youtube_auth_failure_count: int
+    notebooklm_auth_failure_count: int
+    notebooklm_work_item_count: int
+    notebooklm_preflight_status: str
+    notebooklm_circuit_breaker_skipped_count: int
+    replay_queued_count: int
     digest_created: bool
     digest_path: str
     digest_sent_chunks: int

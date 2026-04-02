@@ -1,8 +1,8 @@
 # src/
 
-Last-Reviewed-Date: 2026-03-22
-Last-Reviewed-Commit: 7643a0d
-Review-Note: Simplify: pre-compile inline regex, reorder bold/link substitution in digest HTML formatter.
+Last-Reviewed-Date: 2026-04-01
+Last-Reviewed-Commit: 501b575
+Review-Note: Pipeline outcome now includes NotebookLM circuit-breaker and replay queue metrics used by telemetry and workflow summaries.
 
 Covers `src/` except `src/summarization/` and `src/telemetry/` (routed separately).
 

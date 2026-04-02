@@ -8,6 +8,16 @@ from unittest.mock import patch
 from src.main import run_pipeline
 
 
+def _mock_summarize_items(results, diag=None):
+    """Create a side_effect for summarize_items that populates diagnostics."""
+    def _side_effect(*args, **kwargs):
+        diagnostics = kwargs.get("diagnostics")
+        if diagnostics is not None and diag:
+            diagnostics.update(diag)
+        return results
+    return _side_effect
+
+
 class MainPipelineOutcomeTests(unittest.TestCase):
     @patch("src.main.send_digest_from_env")
     @patch("src.main.generate_digest")
@@ -62,20 +72,30 @@ class MainPipelineOutcomeTests(unittest.TestCase):
             {"status": "ok", "kind": "article", "url": "https://one.example", "content": "Body"},
             {"status": "ok", "kind": "youtube", "url": "https://two.example"},
         ]
-        mock_summarize_items.return_value = [
-            {
-                "status": "ok",
-                "kind": "article",
-                "url": "https://one.example",
-                "summary_path": "data/sources/2026-03-15/one.md",
+        mock_summarize_items.side_effect = _mock_summarize_items(
+            results=[
+                {
+                    "status": "ok",
+                    "kind": "article",
+                    "url": "https://one.example",
+                    "summary_path": "data/sources/2026-03-15/one.md",
+                },
+                {
+                    "status": "ok",
+                    "kind": "youtube",
+                    "url": "https://two.example",
+                    "summary_path": "data/sources/2026-03-15/two.md",
+                },
+            ],
+            diag={
+                "summary_ok_count": 2,
+                "summary_failed_count": 0,
+                "youtube_auth_failure_count": 0,
+                "notebooklm_auth_failure_count": 0,
+                "notebooklm_work_item_count": 1,
+                "notebooklm_preflight_status": "skipped",
             },
-            {
-                "status": "ok",
-                "kind": "youtube",
-                "url": "https://two.example",
-                "summary_path": "data/sources/2026-03-15/two.md",
-            },
-        ]
+        )
         mock_generate_digest.return_value = {
             "digest_path": "data/digests/2026-03-15.md",
             "digest_text": "digest body",
@@ -119,15 +139,25 @@ class MainPipelineOutcomeTests(unittest.TestCase):
                 "failure_path": "data/failed/2026-03-15/x.md",
             }
         ]
-        mock_summarize_items.return_value = [
-            {
-                "status": "failed",
-                "kind": "article",
-                "url": "https://x.com/user/status/123",
-                "error": "x_low_signal_content",
-                "failure_path": "data/failed/2026-03-15/x.md",
-            }
-        ]
+        mock_summarize_items.side_effect = _mock_summarize_items(
+            results=[
+                {
+                    "status": "failed",
+                    "kind": "article",
+                    "url": "https://x.com/user/status/123",
+                    "error": "x_low_signal_content",
+                    "failure_path": "data/failed/2026-03-15/x.md",
+                }
+            ],
+            diag={
+                "summary_ok_count": 0,
+                "summary_failed_count": 1,
+                "youtube_auth_failure_count": 0,
+                "notebooklm_auth_failure_count": 0,
+                "notebooklm_work_item_count": 0,
+                "notebooklm_preflight_status": "skipped",
+            },
+        )
         mock_generate_digest.return_value = {
             "digest_path": "data/digests/2026-03-15.md",
             "digest_text": "digest body",
@@ -164,21 +194,31 @@ class MainPipelineOutcomeTests(unittest.TestCase):
             {"status": "ok", "kind": "article", "url": "https://one.example", "content": "Body"},
             {"status": "ok", "kind": "youtube", "url": "https://youtu.be/xyz"},
         ]
-        mock_summarize_items.return_value = [
-            {
-                "status": "ok",
-                "kind": "article",
-                "url": "https://one.example",
-                "summary_path": "data/sources/2026-03-15/one.md",
+        mock_summarize_items.side_effect = _mock_summarize_items(
+            results=[
+                {
+                    "status": "ok",
+                    "kind": "article",
+                    "url": "https://one.example",
+                    "summary_path": "data/sources/2026-03-15/one.md",
+                },
+                {
+                    "status": "failed",
+                    "kind": "youtube",
+                    "url": "https://youtu.be/xyz",
+                    "error": "youtube_auth_expired",
+                    "failure_path": "data/failed/2026-03-15/xyz.md",
+                },
+            ],
+            diag={
+                "summary_ok_count": 1,
+                "summary_failed_count": 1,
+                "youtube_auth_failure_count": 1,
+                "notebooklm_auth_failure_count": 1,
+                "notebooklm_work_item_count": 1,
+                "notebooklm_preflight_status": "skipped",
             },
-            {
-                "status": "failed",
-                "kind": "youtube",
-                "url": "https://youtu.be/xyz",
-                "error": "youtube_auth_expired",
-                "failure_path": "data/failed/2026-03-15/xyz.md",
-            },
-        ]
+        )
         mock_generate_digest.return_value = {
             "digest_path": "data/digests/2026-03-15.md",
             "digest_text": "digest body",

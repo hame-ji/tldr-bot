@@ -6,11 +6,17 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.summarization.notebooklm_backend import (
     NOTEBOOKLM_AUTH_EXPIRED,
+    NOTEBOOKLM_PREFLIGHT_AUTH_EXPIRED,
+    NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR,
+    NOTEBOOKLM_PREFLIGHT_MISCONFIGURED,
+    NOTEBOOKLM_PREFLIGHT_OK,
+    NOTEBOOKLM_STORAGE_MISCONFIGURED,
     YOUTUBE_AUTH_EXPIRED,
     YOUTUBE_SOURCE_FAILED,
     YOUTUBE_SUMMARY_FAILED,
     NotebookLMSummaryError,
     YouTubeSummaryError,
+    check_notebooklm_auth,
     _resolve_storage_path,
     summarize_youtube,
 )
@@ -47,15 +53,141 @@ class ResolveStoragePathTests(unittest.TestCase):
             if path.exists():
                 path.unlink()
 
-    def test_invalid_state_json_raises_auth_expired(self) -> None:
+    def test_invalid_state_json_raises_storage_misconfigured(self) -> None:
         env = {"NOTEBOOKLM_STORAGE_STATE": "{invalid-json"}
         with patch.dict(os.environ, env, clear=False):
             os.environ.pop("NOTEBOOKLM_STORAGE_PATH", None)
             with self.assertRaises(NotebookLMSummaryError) as ctx:
                 _resolve_storage_path()
-        self.assertEqual(ctx.exception.reason, NOTEBOOKLM_AUTH_EXPIRED)
+        self.assertEqual(ctx.exception.reason, NOTEBOOKLM_STORAGE_MISCONFIGURED)
 
-    def test_raises_auth_expired_when_nothing_configured(self) -> None:
+
+class NotebookLMPreflightTests(unittest.TestCase):
+    @patch("src.summarization.notebooklm_backend._resolve_storage_path")
+    @patch("src.summarization.notebooklm_backend.NotebookLMClient")
+    def test_preflight_returns_ok_for_valid_session(
+        self, mock_client_cls, mock_resolve
+    ) -> None:
+        mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.from_storage = AsyncMock(return_value=mock_client)
+
+        status = check_notebooklm_auth()
+
+        self.assertEqual(status, NOTEBOOKLM_PREFLIGHT_OK)
+
+    @patch("src.summarization.notebooklm_backend._resolve_storage_path")
+    def test_preflight_returns_misconfigured_for_missing_or_invalid_storage(
+        self,
+        mock_resolve,
+    ) -> None:
+        mock_resolve.side_effect = NotebookLMSummaryError(
+            NOTEBOOKLM_STORAGE_MISCONFIGURED,
+            "NOTEBOOKLM_STORAGE_STATE is not valid JSON",
+        )
+
+        status = check_notebooklm_auth()
+
+        self.assertEqual(status, NOTEBOOKLM_PREFLIGHT_MISCONFIGURED)
+
+    @patch("src.summarization.notebooklm_backend._resolve_storage_path")
+    @patch("src.summarization.notebooklm_backend.NotebookLMClient")
+    def test_preflight_returns_auth_expired_on_auth_error(
+        self,
+        mock_client_cls,
+        mock_resolve,
+    ) -> None:
+        from src.summarization.notebooklm_backend import AuthError
+
+        mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(side_effect=AuthError("session expired"))
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.from_storage = AsyncMock(return_value=mock_client)
+
+        status = check_notebooklm_auth()
+
+        self.assertEqual(status, NOTEBOOKLM_PREFLIGHT_AUTH_EXPIRED)
+
+    @patch("src.summarization.notebooklm_backend._resolve_storage_path")
+    @patch("src.summarization.notebooklm_backend.NotebookLMClient")
+    def test_preflight_returns_backend_error_on_sdk_error(
+        self,
+        mock_client_cls,
+        mock_resolve,
+    ) -> None:
+        from src.summarization.notebooklm_backend import NotebookLMError
+
+        mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(
+            side_effect=NotebookLMError("temporary backend issue")
+        )
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client_cls.from_storage = AsyncMock(return_value=mock_client)
+
+        status = check_notebooklm_auth()
+
+        self.assertEqual(status, NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR)
+
+    @patch(
+        "src.summarization.notebooklm_backend._NOTEBOOKLM_PREFLIGHT_TIMEOUT_SECONDS",
+        0.01,
+    )
+    @patch("src.summarization.notebooklm_backend._resolve_storage_path")
+    @patch("src.summarization.notebooklm_backend._attempt_notebooklm_auth")
+    def test_preflight_returns_backend_error_on_timeout(
+        self,
+        mock_attempt,
+        mock_resolve,
+    ) -> None:
+        async def _slow_attempt(_storage_path: str) -> None:
+            import asyncio
+
+            await asyncio.sleep(0.05)
+
+        mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
+        mock_attempt.side_effect = _slow_attempt
+
+        status = check_notebooklm_auth()
+
+        self.assertEqual(status, NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR)
+
+    @patch(
+        "src.summarization.notebooklm_backend._PREFLIGHT_OUTER_TIMEOUT_SECONDS",
+        0.01,
+    )
+    @patch("src.summarization.notebooklm_backend._check_notebooklm_auth_async")
+    def test_preflight_returns_backend_error_on_outer_timeout(
+        self,
+        mock_async_fn,
+    ) -> None:
+        async def _never_returns() -> str:
+            import asyncio
+
+            await asyncio.sleep(999)
+            return "ok"
+
+        mock_async_fn.side_effect = _never_returns
+
+        status = check_notebooklm_auth()
+
+        self.assertEqual(status, NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR)
+
+    @patch("src.summarization.notebooklm_backend._resolve_storage_path")
+    def test_preflight_returns_backend_error_on_unexpected_storage_resolution_error(
+        self,
+        mock_resolve,
+    ) -> None:
+        mock_resolve.side_effect = OSError("No space left on device")
+
+        status = check_notebooklm_auth()
+
+        self.assertEqual(status, NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR)
+
+    def test_raises_storage_misconfigured_when_nothing_configured(self) -> None:
         env = {}
         with patch.dict(os.environ, env):
             os.environ.pop("NOTEBOOKLM_STORAGE_PATH", None)
@@ -64,7 +196,7 @@ class ResolveStoragePathTests(unittest.TestCase):
                 mock_home.return_value = Path("/nonexistent-home-xyz")
                 with self.assertRaises(NotebookLMSummaryError) as ctx:
                     _resolve_storage_path()
-        self.assertEqual(ctx.exception.reason, NOTEBOOKLM_AUTH_EXPIRED)
+        self.assertEqual(ctx.exception.reason, NOTEBOOKLM_STORAGE_MISCONFIGURED)
 
 
 class SummarizeYoutubeTests(unittest.TestCase):
@@ -108,19 +240,27 @@ class SummarizeYoutubeTests(unittest.TestCase):
 
         self.assertEqual(result, "video summary text")
         mock_client.notebooks.create.assert_called_once_with("tldr-bot-temp")
-        mock_client.sources.add_url.assert_called_once_with("notebook-id-1", "https://youtu.be/abc", wait=True)
+        mock_client.sources.add_url.assert_called_once_with(
+            "notebook-id-1", "https://youtu.be/abc", wait=True
+        )
         mock_client.chat.ask.assert_called_once_with("notebook-id-1", "Summarize this")
         mock_client.notebooks.delete.assert_called_once_with("notebook-id-1")
 
     @patch("src.summarization.notebooklm_backend._resolve_storage_path")
     @patch("src.summarization.notebooklm_backend.NotebookLMClient")
-    def test_cleanup_failure_does_not_override_success(self, mock_client_cls, mock_resolve) -> None:
+    def test_cleanup_failure_does_not_override_success(
+        self, mock_client_cls, mock_resolve
+    ) -> None:
         mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
         mock_client = self._make_mock_client("video summary text")
-        mock_client.notebooks.delete = AsyncMock(side_effect=RuntimeError("cleanup failed"))
+        mock_client.notebooks.delete = AsyncMock(
+            side_effect=RuntimeError("cleanup failed")
+        )
         mock_client_cls.from_storage = AsyncMock(return_value=mock_client)
 
-        with self.assertLogs("src.summarization.notebooklm_backend", level="WARNING") as logs:
+        with self.assertLogs(
+            "src.summarization.notebooklm_backend", level="WARNING"
+        ) as logs:
             result = summarize_youtube("https://youtu.be/abc", "Summarize this")
 
         self.assertEqual(result, "video summary text")
@@ -129,7 +269,9 @@ class SummarizeYoutubeTests(unittest.TestCase):
 
     @patch("src.summarization.notebooklm_backend._resolve_storage_path")
     @patch("src.summarization.notebooklm_backend.NotebookLMClient")
-    def test_temp_storage_file_removed_after_success(self, mock_client_cls, mock_resolve) -> None:
+    def test_temp_storage_file_removed_after_success(
+        self, mock_client_cls, mock_resolve
+    ) -> None:
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             f.write(b"{}")
             tmppath = f.name
@@ -145,11 +287,16 @@ class SummarizeYoutubeTests(unittest.TestCase):
 
     @patch("src.summarization.notebooklm_backend._resolve_storage_path")
     @patch("src.summarization.notebooklm_backend.NotebookLMClient")
-    def test_notebook_deleted_even_on_source_failure(self, mock_client_cls, mock_resolve) -> None:
+    def test_notebook_deleted_even_on_source_failure(
+        self, mock_client_cls, mock_resolve
+    ) -> None:
         from src.summarization.notebooklm_backend import SourceAddError
+
         mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
         mock_client = self._make_mock_client()
-        mock_client.sources.add_url = AsyncMock(side_effect=SourceAddError("https://youtu.be/abc"))
+        mock_client.sources.add_url = AsyncMock(
+            side_effect=SourceAddError("https://youtu.be/abc")
+        )
         mock_client_cls.from_storage = AsyncMock(return_value=mock_client)
 
         with self.assertRaises(YouTubeSummaryError) as ctx:
@@ -160,7 +307,9 @@ class SummarizeYoutubeTests(unittest.TestCase):
 
     @patch("src.summarization.notebooklm_backend._resolve_storage_path")
     @patch("src.summarization.notebooklm_backend.NotebookLMClient")
-    def test_empty_answer_raises_summary_failed(self, mock_client_cls, mock_resolve) -> None:
+    def test_empty_answer_raises_summary_failed(
+        self, mock_client_cls, mock_resolve
+    ) -> None:
         mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
         mock_client = self._make_mock_client(answer="")
         mock_client_cls.from_storage = AsyncMock(return_value=mock_client)
@@ -173,7 +322,9 @@ class SummarizeYoutubeTests(unittest.TestCase):
 
     @patch("src.summarization.notebooklm_backend._resolve_storage_path")
     @patch("src.summarization.notebooklm_backend.NotebookLMClient")
-    def test_whitespace_answer_raises_summary_failed(self, mock_client_cls, mock_resolve) -> None:
+    def test_whitespace_answer_raises_summary_failed(
+        self, mock_client_cls, mock_resolve
+    ) -> None:
         mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
         mock_client = self._make_mock_client(answer="   \n\t")
         mock_client_cls.from_storage = AsyncMock(return_value=mock_client)
@@ -186,8 +337,11 @@ class SummarizeYoutubeTests(unittest.TestCase):
 
     @patch("src.summarization.notebooklm_backend._resolve_storage_path")
     @patch("src.summarization.notebooklm_backend.NotebookLMClient")
-    def test_auth_error_raises_auth_expired(self, mock_client_cls, mock_resolve) -> None:
+    def test_auth_error_raises_auth_expired(
+        self, mock_client_cls, mock_resolve
+    ) -> None:
         from src.summarization.notebooklm_backend import AuthError
+
         mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
         mock_client = self._make_mock_client()
         mock_client.__aenter__ = AsyncMock(side_effect=AuthError("session expired"))

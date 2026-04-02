@@ -132,6 +132,92 @@ class ReplayRunnerTests(unittest.TestCase):
             self.assertEqual(outcome["replay_recovered_count"], 0)
             self.assertEqual(outcome["replay_pending_remaining_count"], 1)
 
+    @patch("scripts.replay_notebooklm_failures.summarize_youtube")
+    @patch("scripts.replay_notebooklm_failures.load_prompt")
+    @patch("scripts.replay_notebooklm_failures.notebooklm_config_from_env")
+    def test_run_replay_uses_pending_file_date_for_source_path(
+        self,
+        mock_notebooklm_config,
+        mock_load_prompt,
+        mock_summarize_youtube,
+    ) -> None:
+        class _Cfg:
+            youtube_prompt_path = "prompts/youtube_summarize.txt"
+            article_fallback_prompt_path = "prompts/summarize.txt"
+
+        mock_notebooklm_config.return_value = _Cfg()
+        mock_load_prompt.return_value = "prompt"
+        mock_summarize_youtube.return_value = "summary"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            enqueue_notebooklm_auth_failure(
+                run_date=date(2026, 4, 1),
+                url="https://youtu.be/dated",
+                kind="youtube",
+                reason="youtube_auth_expired",
+                source_failure_path="data/failed/2026-04-01/dated.md",
+                base_dir=tmpdir,
+            )
+
+            sources_dir = Path(tmpdir) / "sources"
+            outcome = run_replay(
+                limit=0,
+                base_dir=tmpdir,
+                sources_base_dir=str(sources_dir),
+            )
+
+            self.assertEqual(outcome["replay_recovered_count"], 1)
+            source_files = list(sources_dir.rglob("*.md"))
+            self.assertTrue(
+                any("2026-04-01" in str(p) for p in source_files),
+                f"Expected source under 2026-04-01 dir, got: {source_files}",
+            )
+
+    @patch("scripts.replay_notebooklm_failures.summarize_youtube")
+    @patch("scripts.replay_notebooklm_failures.load_prompt")
+    @patch("scripts.replay_notebooklm_failures.notebooklm_config_from_env")
+    @patch("scripts.replay_notebooklm_failures._source_output_path")
+    def test_run_replay_keeps_record_pending_on_persistence_failure(
+        self,
+        mock_source_path,
+        mock_notebooklm_config,
+        mock_load_prompt,
+        mock_summarize_youtube,
+    ) -> None:
+        class _Cfg:
+            youtube_prompt_path = "prompts/youtube_summarize.txt"
+            article_fallback_prompt_path = "prompts/summarize.txt"
+
+        mock_notebooklm_config.return_value = _Cfg()
+        mock_load_prompt.return_value = "prompt"
+        mock_summarize_youtube.return_value = "recovered summary"
+        mock_source_path.side_effect = OSError("disk full")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            enqueue_notebooklm_auth_failure(
+                run_date=date(2026, 4, 1),
+                url="https://youtu.be/persist-fail",
+                kind="youtube",
+                reason="youtube_auth_expired",
+                source_failure_path="data/failed/2026-04-01/persist-fail.md",
+                base_dir=tmpdir,
+            )
+
+            outcome = run_replay(
+                limit=0,
+                base_dir=tmpdir,
+                sources_base_dir=str(Path(tmpdir) / "sources"),
+            )
+
+            self.assertEqual(outcome["replay_attempted_count"], 1)
+            self.assertEqual(outcome["replay_recovered_count"], 0)
+            self.assertEqual(outcome["replay_pending_remaining_count"], 1)
+            grouped = load_pending_records(base_dir=tmpdir)
+            all_records = [r for rs in grouped.values() for r in rs]
+            self.assertEqual(len(all_records), 1)
+            self.assertEqual(all_records[0]["attempt_count"], 1)
+            self.assertIn("disk full", all_records[0]["last_error"])
+
 
 if __name__ == "__main__":
     unittest.main()

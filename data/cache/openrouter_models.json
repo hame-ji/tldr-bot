@@ -1,13 +1,16 @@
 {
-  "fetched_at": 1774859074.449516,
+  "fetched_at": 1775117448.7470381,
   "models": [
     "google/gemma-3-27b-it:free",
     "qwen/qwen3-next-80b-a3b-instruct:free",
     "meta-llama/llama-3.2-3b-instruct:free",
     "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen3.6-plus-preview:free",
     "qwen/qwen3-coder:free",
     "nousresearch/hermes-3-llama-3.1-405b:free",
     "liquid/lfm-2.5-1.2b-instruct:free",
+    "google/lyria-3-pro-preview",
+    "google/lyria-3-clip-preview",
     "nvidia/nemotron-3-super-120b-a12b:free",
     "stepfun/step-3.5-flash:free",
     "nvidia/nemotron-3-nano-30b-a3b:free",

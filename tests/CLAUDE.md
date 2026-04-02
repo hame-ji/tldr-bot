@@ -1,8 +1,8 @@
 # tests/
 
 Last-Reviewed-Date: 2026-04-02
-Last-Reviewed-Commit: adb166d
-Review-Note: Added preflight outer-timeout regression test proving check_notebooklm_auth returns backend_error when the async call hangs indefinitely.
+Last-Reviewed-Commit: f29ddc5
+Review-Note: Added replay date-source and persistence-failure regression tests.
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

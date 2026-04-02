@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -38,9 +38,9 @@ def run_replay(
     grouped = load_pending_records(base_dir=base_dir)
     attempted = 0
     recovered = 0
-    replay_date = datetime.now(timezone.utc).date()
 
     for pending_path, records in grouped.items():
+        pending_date = date.fromisoformat(pending_path.stem)
         remaining: list[dict[str, Any]] = []
         for record in records:
             if limit > 0 and attempted >= limit:
@@ -60,14 +60,25 @@ def run_replay(
                 remaining.append(next_record)
                 continue
 
-            out_path = _source_output_path(
-                url=str(record.get("url", "")),
-                run_date=replay_date,
-                base_dir=sources_base_dir,
-            )
-            out_path.write_text(summary + "\n", encoding="utf-8")
+            try:
+                out_path = _source_output_path(
+                    url=str(record.get("url", "")),
+                    run_date=pending_date,
+                    base_dir=sources_base_dir,
+                )
+                out_path.write_text(summary + "\n", encoding="utf-8")
+                append_completed_record(record, base_dir=base_dir)
+            except Exception as exc:  # noqa: BLE001
+                next_record = dict(record)
+                next_record["attempt_count"] = (
+                    int(next_record.get("attempt_count", 0)) + 1
+                )
+                next_record["last_error"] = str(exc)
+                next_record["last_attempt_at"] = datetime.now(timezone.utc).isoformat()
+                remaining.append(next_record)
+                continue
+
             recovered += 1
-            append_completed_record(record, base_dir=base_dir)
 
         rewrite_pending_file(pending_path, remaining)
 

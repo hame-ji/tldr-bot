@@ -1,8 +1,8 @@
 # src/
 
 Last-Reviewed-Date: 2026-04-01
-Last-Reviewed-Commit: 501b575
-Review-Note: Pipeline outcome now includes NotebookLM circuit-breaker and replay queue metrics used by telemetry and workflow summaries.
+Last-Reviewed-Commit: 680150e
+Review-Note: Pipeline outcome now exposes NotebookLM preflight/circuit-breaker/replay queue signals as the observability contract consumed by telemetry and workflows.
 
 Covers `src/` except `src/summarization/` and `src/telemetry/` (routed separately).
 

@@ -119,7 +119,12 @@ NotebookLM authentication is also required for YouTube summarization and Noteboo
 
 Optional NotebookLM auth preflight mode:
 
-- `NOTEBOOKLM_PREFLIGHT_MODE` = `observe` (default), `enforce`, or `off`
+- `NOTEBOOKLM_PREFLIGHT_MODE` = `enforce` (workflow default), `observe`, or `off`
+
+Replay recovery workflow:
+
+- run `.github/workflows/replay-notebooklm.yml` manually after credential refresh
+- replay queue artifacts live under `data/replay/notebooklm/pending/` and `data/replay/notebooklm/completed/`
 
 ## Documentation
 

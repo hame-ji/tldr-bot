@@ -1,7 +1,7 @@
 # Project State: Telegram Research Digest Bot
 
-**Last updated:** 2026-03-28
-**Session:** Truth-alignment refresh (post-implementation)
+**Last updated:** 2026-04-02
+**Session:** NotebookLM auth resilience + dedicated replay workflow hardening
 
 ---
 
@@ -30,6 +30,7 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 ## Live Behavior Snapshot
 
 - Runtime: `.github/workflows/digest.yml` (daily schedule + manual dispatch)
+- Recovery workflow: `.github/workflows/replay-notebooklm.yml` (manual replay control plane)
 - Entry point: `python -m src` (`src/main.py`)
 - Polling state: `state.json` (`telegram_offset`)
 - Summarization routing:
@@ -38,6 +39,7 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
   - NotebookLM fallback for eligible article fetch failures
 - Persistence: `data/sources/`, `data/failed/`, `data/digests/`
 - Commit policy (live workflow): create-only daily commit subject; skip commit on empty day or no staged changes
+- NotebookLM policy: preflight guardrail in `enforce` mode, runtime auth circuit breaker, replay queue for auth failures
 
 ---
 
@@ -50,6 +52,8 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 | Markdown artifacts in repo | Human-readable outputs and portable history |
 | Split backend routing | Better fit by source type and degraded-fetch cases |
 | Per-item failure isolation | One URL failure should not abort digest run |
+| Dedicated replay control plane | Recovery should not require Telegram re-polling |
+| Shared workflow concurrency group | Prevent replay queue mutation races |
 
 ---
 
@@ -58,6 +62,7 @@ Progress: [ Phase 1 ][ Phase 2 ][ Phase 3 ][ Phase 4 ][ Phase 5 ][ Phase 6 ]
 - Pipeline emits `run_outcome:` JSON and `run_metrics:` JSON to logs.
 - Workflow extraction/reporting is non-blocking and should not block successful content persistence.
 - Empty-day behavior: no digest delivery and no commit/push.
+- NotebookLM replay queue is persisted under `data/replay/notebooklm/` and drained by `replay-notebooklm.yml`.
 
 ---
 
@@ -67,8 +72,8 @@ To resume with minimal ambiguity:
 
 1. Read `.planning/REQUIREMENTS.md` for scope and requirement status.
 2. Read `architecture.md` for rationale/trade-offs/failure model.
-3. Read `.github/workflows/digest.yml` for exact runtime and persistence behavior.
+3. Read `.github/workflows/digest.yml` and `.github/workflows/replay-notebooklm.yml` for runtime and recovery behavior.
 4. Read `docs/operations.md` for incident handling.
 
 ---
-*State refreshed: 2026-03-28 for drift elimination*
+*State refreshed: 2026-04-02 for NotebookLM auth resilience alignment*

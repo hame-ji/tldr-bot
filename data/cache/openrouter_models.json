@@ -1,11 +1,11 @@
 {
-  "fetched_at": 1775117448.7470381,
+  "fetched_at": 1775203495.879339,
   "models": [
     "google/gemma-3-27b-it:free",
     "qwen/qwen3-next-80b-a3b-instruct:free",
     "meta-llama/llama-3.2-3b-instruct:free",
     "meta-llama/llama-3.3-70b-instruct:free",
-    "qwen/qwen3.6-plus-preview:free",
+    "qwen/qwen3.6-plus:free",
     "qwen/qwen3-coder:free",
     "nousresearch/hermes-3-llama-3.1-405b:free",
     "liquid/lfm-2.5-1.2b-instruct:free",

@@ -1,8 +1,8 @@
 # tests/
 
-Last-Reviewed-Date: 2026-03-23
-Last-Reviewed-Commit: 256a78a
-Review-Note: Added run-history regression coverage for comparable-run filtering, skip aggregates, and updated summary entrypoint output.
+Last-Reviewed-Date: 2026-04-02
+Last-Reviewed-Commit: f29ddc5
+Review-Note: Added replay date-source and persistence-failure regression tests.
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

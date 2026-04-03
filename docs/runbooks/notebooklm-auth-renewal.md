@@ -11,13 +11,15 @@ Restore NotebookLM-backed summarization after auth expiration with deterministic
 ## Scope
 
 - In scope: renewal and validation of NotebookLM auth material used by `NOTEBOOKLM_STORAGE_STATE`.
-- Out of scope: fail-fast pipeline behavior, proactive alerting, and automation strategy.
+- Out of scope: changing fail-fast policy or workflow architecture.
 
 ## Trigger Conditions
 
 Run this playbook when one or more are true:
 
 - Pipeline logs include `notebooklm_auth_expired`.
+- Job summary shows `NotebookLM preflight status: auth_expired` or `misconfigured`.
+- Job summary shows `NotebookLM auth failures` greater than `0`.
 - YouTube processing fails with NotebookLM auth-related errors.
 - Article fallback to NotebookLM fails with auth-related errors.
 
@@ -71,7 +73,13 @@ Run this playbook when one or more are true:
 5. Open the newest `digest` run and inspect `Run pipeline entrypoint` logs.
 
    ```bash
-   gh run list --workflow digest.yml --limit 1
+    gh run list --workflow digest.yml --limit 1
+    ```
+
+6. Replay queued NotebookLM auth failures.
+
+   ```bash
+   gh workflow run replay-notebooklm.yml -f replay_limit=0
    ```
 
 ## Verification (Required)
@@ -79,6 +87,9 @@ Run this playbook when one or more are true:
 Mark incident as `recovered` only if all checks pass:
 
 - No `notebooklm_auth_expired` errors in the rerun.
+- Job summary reports `NotebookLM preflight status: ok`.
+- Job summary reports `NotebookLM auth failures: 0`.
+- Replay summary shows pending remaining count is `0` (or bounded remainder if `replay_limit` was set).
 - NotebookLM processing resumes (`summary:youtube:` log lines present when YouTube URLs are part of that run).
 - New source outputs are written under `data/sources/YYYY-MM-DD/` for affected items.
 

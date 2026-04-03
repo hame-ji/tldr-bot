@@ -29,7 +29,12 @@ class ScriptEntrypointTests(unittest.TestCase):
             env["GITHUB_OUTPUT"] = str(output_path)
 
             result = subprocess.run(
-                [sys.executable, "-m", "scripts.extract_pipeline_outputs", str(log_path)],
+                [
+                    sys.executable,
+                    "-m",
+                    "scripts.extract_pipeline_outputs",
+                    str(log_path),
+                ],
                 cwd=REPO_ROOT,
                 env=env,
                 capture_output=True,
@@ -86,7 +91,9 @@ class ScriptEntrypointTests(unittest.TestCase):
             self.assertIn("Performance Summary (Last 7 Comparable Runs)", summary_text)
             self.assertIn("Run history unavailable", summary_text)
 
-    def test_empty_day_run_outcome_maps_to_skipped_empty_day_commit_status(self) -> None:
+    def test_empty_day_run_outcome_maps_to_skipped_empty_day_commit_status(
+        self,
+    ) -> None:
         log_text = (
             'run_outcome:{"processed_urls": 0, "summary_ok_count": 0, "summary_failed_count": 0, '
             '"digest_created": false, "digest_path": "", "digest_sent_chunks": 0}'
@@ -157,7 +164,12 @@ class ScriptEntrypointTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             missing_log_path = Path(temp_dir) / "missing.log"
             result = subprocess.run(
-                [sys.executable, "-m", "scripts.extract_processed_urls", str(missing_log_path)],
+                [
+                    sys.executable,
+                    "-m",
+                    "scripts.extract_processed_urls",
+                    str(missing_log_path),
+                ],
                 cwd=REPO_ROOT,
                 capture_output=True,
                 text=True,
@@ -167,10 +179,12 @@ class ScriptEntrypointTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("pipeline log not found", result.stderr)
 
-    def test_extract_processed_urls_module_fails_when_run_outcome_is_missing(self) -> None:
+    def test_extract_processed_urls_module_fails_when_run_outcome_is_missing(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             log_path = Path(temp_dir) / "pipeline.log"
-            log_path.write_text("run_metrics:{\"metrics_version\":1}", encoding="utf-8")
+            log_path.write_text('run_metrics:{"metrics_version":1}', encoding="utf-8")
 
             result = subprocess.run(
                 [sys.executable, "-m", "scripts.extract_processed_urls", str(log_path)],
@@ -182,6 +196,37 @@ class ScriptEntrypointTests(unittest.TestCase):
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("invalid pipeline log contract", result.stderr)
+
+    def test_replay_notebooklm_failures_module_handles_empty_queue(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            replay_base = Path(temp_dir) / "replay"
+            output_path = Path(temp_dir) / "github_output.txt"
+
+            env = os.environ.copy()
+            env["GITHUB_OUTPUT"] = str(output_path)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "scripts.replay_notebooklm_failures",
+                    "--base-dir",
+                    str(replay_base),
+                    "--sources-base-dir",
+                    str(Path(temp_dir) / "sources"),
+                ],
+                cwd=REPO_ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr or result.stdout)
+            self.assertIn("replay_outcome:", result.stdout)
+            output_text = output_path.read_text(encoding="utf-8")
+            self.assertIn("replay_attempted_count=0", output_text)
+            self.assertIn("replay_recovered_count=0", output_text)
 
 
 if __name__ == "__main__":

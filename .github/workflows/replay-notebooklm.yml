@@ -1,0 +1,105 @@
+name: replay-notebooklm
+
+on:
+  workflow_dispatch:
+    inputs:
+      replay_limit:
+        description: "Replay max attempts (0 = no limit)"
+        required: false
+        default: "0"
+      dry_run:
+        description: "Run replay without committing"
+        required: false
+        default: "false"
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: digest-pipeline
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NOTEBOOKLM_STORAGE_STATE: ${{ secrets.NOTEBOOKLM_STORAGE_STATE }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Validate required secrets
+        run: |
+          test -n "$NOTEBOOKLM_STORAGE_STATE"
+
+      - name: Preflight NotebookLM auth
+        id: preflight
+        run: |
+          set -euo pipefail
+          PREFLIGHT_STATUS="$(uv run python -c 'from src.summarization.notebooklm_backend import check_notebooklm_auth; print(check_notebooklm_auth())')"
+          echo "notebooklm_preflight_status=${PREFLIGHT_STATUS}" >> "$GITHUB_OUTPUT"
+          if [ "${PREFLIGHT_STATUS}" != "ok" ]; then
+            echo "::warning::NotebookLM preflight status is ${PREFLIGHT_STATUS}; refresh NOTEBOOKLM_STORAGE_STATE before replay."
+            exit 1
+          fi
+
+      - name: Replay queued NotebookLM auth failures
+        id: replay
+        run: |
+          set -euo pipefail
+          uv run python -m scripts.replay_notebooklm_failures --limit "${{ github.event.inputs.replay_limit || '0' }}"
+
+      - name: Commit and push replay outputs
+        id: persist_outputs
+        if: ${{ success() && github.event.inputs.dry_run != 'true' }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/
+          if git diff --staged --quiet; then
+            echo "No replay output changes; skipping commit/push"
+            echo "commit_status=no_changes" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          TODAY_UTC=$(date -u +%F)
+          git commit -m "chore(replay): ${TODAY_UTC} notebooklm auth recovery"
+          git push
+          echo "commit_status=pushed" >> "$GITHUB_OUTPUT"
+
+      - name: Write replay summary
+        if: ${{ always() }}
+        env:
+          PREFLIGHT_STATUS: ${{ steps.preflight.outputs.notebooklm_preflight_status || 'unknown' }}
+          REPLAY_ATTEMPTED_COUNT: ${{ steps.replay.outputs.replay_attempted_count || '0' }}
+          REPLAY_RECOVERED_COUNT: ${{ steps.replay.outputs.replay_recovered_count || '0' }}
+          REPLAY_PENDING_REMAINING_COUNT: ${{ steps.replay.outputs.replay_pending_remaining_count || '0' }}
+          COMMIT_STATUS: ${{ steps.persist_outputs.outputs.commit_status || 'not_required' }}
+        run: |
+          {
+            echo "## NotebookLM replay"
+            echo
+            echo "- Preflight status: ${PREFLIGHT_STATUS}"
+            echo "- Replay attempted/recovered/pending: ${REPLAY_ATTEMPTED_COUNT}/${REPLAY_RECOVERED_COUNT}/${REPLAY_PENDING_REMAINING_COUNT}"
+            echo "- Output persistence: ${COMMIT_STATUS}"
+          } >> "$GITHUB_STEP_SUMMARY"

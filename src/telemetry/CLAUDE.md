@@ -1,8 +1,8 @@
 # src/telemetry/
 
-Last-Reviewed-Date: 2026-03-23
-Last-Reviewed-Commit: 5821410
-Review-Note: Split run-history reporting into raw snapshot, summary policy, and rendering layers.
+Last-Reviewed-Date: 2026-04-01
+Last-Reviewed-Commit: 680150e
+Review-Note: Parser/output contract now includes NotebookLM preflight incident signals and replay/circuit-breaker counters with fail-soft defaults.
 
 - `run_metrics.py`: frozen `RunMetrics` dataclass emitted as `run_metrics:` JSON log line. `metrics_version=1`.
 - `pipeline_log_parser.py`: extracts `run_outcome:` and `run_metrics:` from pipeline stdout. Tolerant on missing metrics (fills "unknown"). Used by CI to set workflow outputs.

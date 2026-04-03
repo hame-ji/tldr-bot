@@ -1,8 +1,8 @@
 # src/summarization/
 
-Last-Reviewed-Date: 2026-03-22
-Last-Reviewed-Commit: 84f978d
-Review-Note: Simplify: lazy prompt caching, from_config classmethod to eliminate parameter sprawl.
+Last-Reviewed-Date: 2026-04-02
+Last-Reviewed-Commit: adb166d
+Review-Note: NotebookLM preflight auth is bounded by both inner async timeout and outer thread join timeout.
 
 - `Summarizer` protocol in `common.py` defines the contract. Backends implement it.
 - `notebooklm_backend.py`: NotebookLM backend for YouTube summarization and article fallback. Exposes `summarize_url()`, `summarize_youtube()`, and typed error classes.

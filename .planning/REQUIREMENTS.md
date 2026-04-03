@@ -44,6 +44,9 @@
 - [x] **SUM-03**: Summarization behavior is controlled by a prompt file (`prompts/summarize.txt`) — not hardcoded
 - [x] **SUM-04**: Each summary is written to `data/sources/YYYY-MM-DD/slug.md` as a Markdown file
 - [x] **SUM-05**: OpenRouter API calls include request spacing and retry logic to handle rate limits across free-model fallbacks
+- [x] **SUM-06**: NotebookLM preflight auth check runs before NotebookLM work and returns machine-readable status (`ok`, `auth_expired`, `misconfigured`, `backend_error`)
+- [x] **SUM-07**: Workflow default preflight mode is `enforce`; NotebookLM auth preflight failure fast-fails NotebookLM work without aborting other provider paths
+- [x] **SUM-08**: In enforce mode, runtime NotebookLM auth failure opens a circuit breaker that skips remaining NotebookLM items for that batch
 
 ### Digest & Delivery
 
@@ -60,6 +63,12 @@
 - [x] **STOR-02**: The pipeline commits output changes to the repository with a standard daily commit message
 - [x] **STOR-03**: If no URLs are processed or no staged outputs exist, commit/push is skipped
 - [x] **STOR-04**: Git push uses standard `git push` behavior (no amend/force path in live workflow)
+- [x] **STOR-05**: NotebookLM auth-failed items are queued in `data/replay/notebooklm/pending/*.jsonl` for deterministic replay
+
+### Recovery Workflow
+
+- [x] **RCVR-01**: Dedicated workflow `replay-notebooklm.yml` replays queued NotebookLM auth failures without Telegram polling
+- [x] **RCVR-02**: Replay and digest workflows share `digest-pipeline` concurrency group to prevent replay queue race conditions
 
 ## v2 Requirements
 
@@ -121,6 +130,9 @@
 | SUM-03 | Phase 4 — Summarization Routing | Completed |
 | SUM-04 | Phase 4 — Summarization Routing | Completed |
 | SUM-05 | Phase 4 — Summarization Routing | Completed |
+| SUM-06 | Phase 4 — Summarization Routing | Completed |
+| SUM-07 | Phase 4 — Summarization Routing | Completed |
+| SUM-08 | Phase 4 — Summarization Routing | Completed |
 | DGST-01 | Phase 5 — Digest Generation & Delivery | Completed |
 | DGST-02 | Phase 5 — Digest Generation & Delivery | Completed |
 | DGST-03 | Phase 5 — Digest Generation & Delivery | Completed |
@@ -131,12 +143,15 @@
 | STOR-02 | Phase 6 — Pipeline Orchestration & Git Integration | Completed |
 | STOR-03 | Phase 6 — Pipeline Orchestration & Git Integration | Completed |
 | STOR-04 | Phase 6 — Pipeline Orchestration & Git Integration | Completed |
+| STOR-05 | Phase 6 — Pipeline Orchestration & Git Integration | Completed |
+| RCVR-01 | Phase 6 — Pipeline Orchestration & Git Integration | Completed |
+| RCVR-02 | Phase 6 — Pipeline Orchestration & Git Integration | Completed |
 
 **Coverage:**
-- v1 requirements: 34 total
-- Mapped to phases: 34
+- v1 requirements: 40 total
+- Mapped to phases: 40
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-15*
-*Last updated: 2026-03-28 after truth-alignment refresh*
+*Last updated: 2026-04-02 after NotebookLM auth resilience + replay workflow hardening*

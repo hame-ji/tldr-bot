@@ -1,8 +1,8 @@
 # src/
 
-Last-Reviewed-Date: 2026-03-22
-Last-Reviewed-Commit: 7643a0d
-Review-Note: Simplify: pre-compile inline regex, reorder bold/link substitution in digest HTML formatter.
+Last-Reviewed-Date: 2026-04-01
+Last-Reviewed-Commit: 680150e
+Review-Note: Pipeline outcome now exposes NotebookLM preflight/circuit-breaker/replay queue signals as the observability contract consumed by telemetry and workflows.
 
 Covers `src/` except `src/summarization/` and `src/telemetry/` (routed separately).
 

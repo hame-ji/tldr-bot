@@ -117,6 +117,15 @@ NotebookLM authentication is also required for YouTube summarization and Noteboo
 - `NOTEBOOKLM_STORAGE_PATH`, or
 - local `~/.notebooklm/storage_state.json` from `notebooklm login`
 
+Optional NotebookLM auth preflight mode:
+
+- `NOTEBOOKLM_PREFLIGHT_MODE` = `enforce` (workflow default), `observe`, or `off`
+
+Replay recovery workflow:
+
+- run `.github/workflows/replay-notebooklm.yml` manually after credential refresh
+- replay queue artifacts live under `data/replay/notebooklm/pending/` and `data/replay/notebooklm/completed/`
+
 ## Documentation
 
 - `architecture.md` - architecture rationale, backend routing, failure model, and observability

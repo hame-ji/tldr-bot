@@ -175,6 +175,23 @@ The live workflow behavior is intentionally simple:
 
 The repository also contains pure commit-strategy logic for a one-commit-per-day amend policy, but the checked-in workflow currently documents and executes the simpler create-only behavior. This document describes the live workflow.
 
+### NotebookLM credential lifecycle
+
+- **Data plane (`digest.yml`)**
+  - runs ingestion and daily digest generation
+  - uses NotebookLM preflight in `enforce` mode as the default guardrail
+  - keeps provider isolation: NotebookLM failures do not abort non-NotebookLM work
+  - applies a NotebookLM auth circuit breaker: first auth failure in enforce mode skips remaining NotebookLM items in that batch
+
+- **Control plane (`replay-notebooklm.yml`)**
+  - runs operator-initiated auth-failure replay only
+  - does not poll Telegram and does not mutate `state.json`
+  - drains queued auth failures from `data/replay/notebooklm/pending/` and archives recovered entries under `data/replay/notebooklm/completed/`
+
+- **Concurrency and consistency**
+  - digest and replay workflows share the same GitHub Actions concurrency group (`digest-pipeline`)
+  - this serializes queue mutations and prevents replay rewrite vs digest append races
+
 ---
 
 ## Observability and Run Telemetry

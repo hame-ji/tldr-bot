@@ -17,6 +17,16 @@ def _env_enabled(name: str, default: bool) -> bool:
     return default
 
 
+def _env_choice(name: str, default: str, allowed: set[str]) -> str:
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    normalized = raw.strip().lower()
+    if normalized in allowed:
+        return normalized
+    return default
+
+
 @dataclass(frozen=True)
 class OpenRouterConfig:
     api_key: str
@@ -35,6 +45,7 @@ class NotebookLMConfig:
     youtube_prompt_path: str = "prompts/youtube_summarize.txt"
     article_fallback_prompt_path: str = "prompts/summarize.txt"
     article_fallback_enabled: bool = True
+    preflight_mode: str = "observe"
 
 
 @dataclass(frozen=True)
@@ -55,20 +66,41 @@ def openrouter_config_from_env() -> OpenRouterConfig:
         api_key=api_key,
         base_url=os.environ.get("OPENROUTER_API_BASE", "https://openrouter.ai/api/v1"),
         preferred_models=preferred_models,
-        min_spacing_seconds=float(os.environ.get("OPENROUTER_MIN_SPACING_SECONDS", "1")),
+        min_spacing_seconds=float(
+            os.environ.get("OPENROUTER_MIN_SPACING_SECONDS", "1")
+        ),
         max_retries=int(os.environ.get("OPENROUTER_MAX_RETRIES", "6")),
-        initial_backoff_seconds=float(os.environ.get("OPENROUTER_INITIAL_BACKOFF_SECONDS", "5")),
-        max_backoff_seconds=float(os.environ.get("OPENROUTER_MAX_BACKOFF_SECONDS", "120")),
-        models_cache_path=os.environ.get("OPENROUTER_MODELS_CACHE_PATH", "data/cache/openrouter_models.json"),
-        models_cache_ttl_seconds=int(os.environ.get("OPENROUTER_MODELS_CACHE_TTL_SECONDS", "21600")),
+        initial_backoff_seconds=float(
+            os.environ.get("OPENROUTER_INITIAL_BACKOFF_SECONDS", "5")
+        ),
+        max_backoff_seconds=float(
+            os.environ.get("OPENROUTER_MAX_BACKOFF_SECONDS", "120")
+        ),
+        models_cache_path=os.environ.get(
+            "OPENROUTER_MODELS_CACHE_PATH", "data/cache/openrouter_models.json"
+        ),
+        models_cache_ttl_seconds=int(
+            os.environ.get("OPENROUTER_MODELS_CACHE_TTL_SECONDS", "21600")
+        ),
     )
 
 
 def notebooklm_config_from_env() -> NotebookLMConfig:
     return NotebookLMConfig(
-        youtube_prompt_path=os.environ.get("NOTEBOOKLM_SUMMARIZE_PROMPT_PATH", "prompts/youtube_summarize.txt"),
-        article_fallback_prompt_path=os.environ.get("NOTEBOOKLM_ARTICLE_SUMMARIZE_PROMPT_PATH", "prompts/summarize.txt"),
-        article_fallback_enabled=_env_enabled("NOTEBOOKLM_ARTICLE_FALLBACK_ENABLED", default=True),
+        youtube_prompt_path=os.environ.get(
+            "NOTEBOOKLM_SUMMARIZE_PROMPT_PATH", "prompts/youtube_summarize.txt"
+        ),
+        article_fallback_prompt_path=os.environ.get(
+            "NOTEBOOKLM_ARTICLE_SUMMARIZE_PROMPT_PATH", "prompts/summarize.txt"
+        ),
+        article_fallback_enabled=_env_enabled(
+            "NOTEBOOKLM_ARTICLE_FALLBACK_ENABLED", default=True
+        ),
+        preflight_mode=_env_choice(
+            "NOTEBOOKLM_PREFLIGHT_MODE",
+            default="observe",
+            allowed={"off", "observe", "enforce"},
+        ),
     )
 
 

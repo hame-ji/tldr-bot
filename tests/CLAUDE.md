@@ -1,8 +1,8 @@
 # tests/
 
 Last-Reviewed-Date: 2026-04-07
-Last-Reviewed-Commit: 4853f3d
-Review-Note: Replay tests cover malformed pending filenames in addition to date-source and persistence-failure regressions.
+Last-Reviewed-Commit: 0d01b08
+Review-Note: Summarizer regressions cover noop diagnostics and enforce-mode overlap, and replay tests cover malformed pending filenames.
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

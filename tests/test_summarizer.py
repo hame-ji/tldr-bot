@@ -352,6 +352,35 @@ class SummarizerTests(unittest.TestCase):
         self.assertEqual(results[0]["url"], item["url"])
         mock_summarize_url.assert_not_called()
 
+    def test_passthrough_only_batch_still_populates_diagnostics(self) -> None:
+        diagnostics: dict[str, object] = {}
+
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            _override_env({"NOTEBOOKLM_ARTICLE_FALLBACK_ENABLED": "false"}),
+        ):
+            results = summarize_items(
+                items=[
+                    {
+                        "status": "failed",
+                        "kind": "article",
+                        "url": "https://example.com/blocked",
+                        "error": "403 Client Error",
+                        "reason": "http_blocked",
+                        "failure_path": str(Path(tmpdir) / "failed.md"),
+                    }
+                ],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+                diagnostics=diagnostics,
+            )
+
+        self.assertEqual(results[0]["status"], "failed")
+        self.assertEqual(diagnostics["summary_ok_count"], 0)
+        self.assertEqual(diagnostics["summary_failed_count"], 1)
+        self.assertEqual(diagnostics["replay_queued_count"], 0)
+
     @patch("src.summarizer.summarize_youtube_with_notebooklm")
     @patch("src.summarizer.check_notebooklm_auth")
     def test_preflight_observe_mode_records_status_but_keeps_processing(
@@ -562,6 +591,68 @@ class SummarizerTests(unittest.TestCase):
         self.assertEqual(results[0]["status"], "failed")
         self.assertIn("timed out", results[0]["error"])
         self.assertEqual(results[1]["status"], "ok")
+
+    @patch("src.summarizer.summarize_youtube_with_notebooklm")
+    @patch("src.summarizer.OpenRouterSummarizer")
+    @patch("src.summarizer.check_notebooklm_auth")
+    def test_preflight_enforce_mode_keeps_article_and_notebooklm_overlap(
+        self,
+        mock_check_notebooklm_auth,
+        mock_openrouter_cls,
+        mock_summarize_youtube,
+    ) -> None:
+        article_started = threading.Event()
+        youtube_started = threading.Event()
+
+        class _ArticleOnly:
+            def __init__(self) -> None:
+                self.saw_youtube_start = False
+
+            def summarize_article(self, url: str, content: str) -> str:
+                article_started.set()
+                self.saw_youtube_start = youtube_started.wait(0.05)
+                time.sleep(0.01)
+                return "article summary"
+
+        article_summarizer = _ArticleOnly()
+        mock_openrouter_cls.from_config.return_value = article_summarizer
+        mock_check_notebooklm_auth.return_value = "ok"
+
+        def _youtube_side_effect(url: str, prompt: str) -> str:
+            youtube_started.set()
+            article_started.wait(0.05)
+            time.sleep(0.01)
+            return "youtube summary"
+
+        mock_summarize_youtube.side_effect = _youtube_side_effect
+
+        with (
+            tempfile.TemporaryDirectory() as tmpdir,
+            _override_env(
+                {
+                    "OPENROUTER_API_KEY": "key",
+                    "OPENROUTER_MAX_CONCURRENCY": "1",
+                    "NOTEBOOKLM_PREFLIGHT_MODE": "enforce",
+                }
+            ),
+        ):
+            results = summarize_items(
+                items=[
+                    {
+                        "status": "ok",
+                        "kind": "article",
+                        "url": "https://example.com/a1",
+                        "content": "body1",
+                    },
+                    {"status": "ok", "kind": "youtube", "url": "https://youtu.be/v1"},
+                ],
+                run_date=date(2026, 3, 15),
+                sources_base_dir=tmpdir,
+                failed_base_dir=tmpdir,
+            )
+
+        self.assertTrue(all(result["status"] == "ok" for result in results))
+        self.assertTrue(article_summarizer.saw_youtube_start)
 
 
 class ClampConcurrencyTests(unittest.TestCase):

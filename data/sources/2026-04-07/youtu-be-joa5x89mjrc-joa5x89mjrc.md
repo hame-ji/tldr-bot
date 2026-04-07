@@ -1,0 +1,20 @@
+Title: Career and Engineering Trends in the Age of AI
+
+TL;DR: Software engineers must adapt to an industry shifting toward smaller teams, flattened management structures, and AI-driven abstraction by prioritizing business value and tool adoption.
+
+Key points:
+- Engineering teams are shrinking from "two-pizza" groups to "one-pizza" units of two to four developers, drastically reducing the demand for dedicated middle managers.
+- Product-minded engineers who proactively question requirements to simplify architectural effort consistently outpace peers who only focus on writing code.
+- AI code generation is a new "leap of abstraction" akin to the historical shift from assembly to high-level compilers, favoring adaptability over rote memorization.
+- While AI accelerates output, novice developers are prone to trusting its incorrect answers, whereas domain experts use it successfully by actively identifying and rejecting flawed logic.
+- The belief that doing great work is enough for career advancement is a myth; engineers at large companies must actively promote their impact to ensure visibility.
+
+Why it matters:
+- To survive current industry contractions and the AI revolution, developers must transition from being purely focused on coding syntax to becoming product-aware problem solvers who leverage AI to accelerate development without blindly trusting it.
+
+Evidence:
+- Following the end of zero-interest-rate environments in 2023, major tech companies eliminated many middle management roles in favor of tech leads reporting directly to directors.
+- Top engineers at AI companies like Anthropic use AI tools to generate the vast majority of their code, demonstrating the immense productivity advantage of fully embracing new tooling.
+
+Caveat:
+- AI models currently lack the situational awareness and professional accountability required for high-stakes business or legal decisions, making human oversight mandatory.

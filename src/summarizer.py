@@ -248,7 +248,7 @@ def summarize_items(
 
     if not has_articles and not has_notebooklm:
         noop = _NoopSummarizer()
-        return [
+        final_results = [
             summarize_item(
                 item=item,
                 summarizer=noop,
@@ -258,6 +258,17 @@ def summarize_items(
             )
             for item in items
         ]
+        diagnostics_out["summary_ok_count"] = sum(
+            1 for result in final_results if result.get("status") == "ok"
+        )
+        diagnostics_out["summary_failed_count"] = sum(
+            1 for result in final_results if result.get("status") == "failed"
+        )
+        diagnostics_out["youtube_auth_failure_count"] = 0
+        diagnostics_out["notebooklm_auth_failure_count"] = 0
+        diagnostics_out["notebooklm_circuit_breaker_skipped_count"] = 0
+        diagnostics_out["replay_queued_count"] = 0
+        return final_results
 
     or_config: OpenRouterConfig | None = None
     if has_articles:
@@ -343,6 +354,20 @@ def summarize_items(
         )
         return (idx, result)
 
+    def _await_future_result(
+        future: Any,
+        *,
+        idx: int,
+        item: dict[str, Any],
+        submitted_at: float,
+    ) -> tuple[int, dict[str, Any]]:
+        if future.done():
+            return future.result()
+        remaining_timeout = _FUTURE_TIMEOUT_SECONDS - (time.monotonic() - submitted_at)
+        if remaining_timeout <= 0:
+            raise FutureTimeoutError()
+        return future.result(timeout=remaining_timeout)
+
     timed_out = False
     notebooklm_circuit_open = False
     notebooklm_circuit_breaker_skipped_count = 0
@@ -359,7 +384,12 @@ def summarize_items(
     try:
         article_futures = (
             [
-                (or_pool.submit(_timed_summarize, idx, item, "article"), idx, item)
+                (
+                    or_pool.submit(_timed_summarize, idx, item, "article"),
+                    idx,
+                    item,
+                    time.monotonic(),
+                )
                 for idx, item in article_work
             ]
             if or_pool
@@ -372,25 +402,13 @@ def summarize_items(
                     idx,
                     item,
                     work_type,
+                    time.monotonic(),
                 )
                 for idx, item, work_type in notebooklm_work_to_run
             ]
             if notebooklm_pool
             else []
         )
-
-        for future, idx, item in article_futures:
-            try:
-                result_idx, result = future.result(timeout=_FUTURE_TIMEOUT_SECONDS)
-                results[result_idx] = result
-            except FutureTimeoutError:
-                timed_out = True
-                future.cancel()
-                results[idx] = _timeout_result(
-                    item=item,
-                    failed_base_dir=failed_base_dir,
-                    timeout_seconds=_FUTURE_TIMEOUT_SECONDS,
-                )
 
         if preflight_mode == "enforce":
             for idx, item, work_type in notebooklm_work_to_run:
@@ -432,9 +450,14 @@ def summarize_items(
                 }:
                     notebooklm_circuit_open = True
         else:
-            for future, idx, item, _work_type in notebooklm_futures:
+            for future, idx, item, _work_type, submitted_at in notebooklm_futures:
                 try:
-                    result_idx, result = future.result(timeout=_FUTURE_TIMEOUT_SECONDS)
+                    result_idx, result = _await_future_result(
+                        future,
+                        idx=idx,
+                        item=item,
+                        submitted_at=submitted_at,
+                    )
                     results[result_idx] = result
                 except FutureTimeoutError:
                     timed_out = True
@@ -444,6 +467,24 @@ def summarize_items(
                         failed_base_dir=failed_base_dir,
                         timeout_seconds=_FUTURE_TIMEOUT_SECONDS,
                     )
+
+        for future, idx, item, submitted_at in article_futures:
+            try:
+                result_idx, result = _await_future_result(
+                    future,
+                    idx=idx,
+                    item=item,
+                    submitted_at=submitted_at,
+                )
+                results[result_idx] = result
+            except FutureTimeoutError:
+                timed_out = True
+                future.cancel()
+                results[idx] = _timeout_result(
+                    item=item,
+                    failed_base_dir=failed_base_dir,
+                    timeout_seconds=_FUTURE_TIMEOUT_SECONDS,
+                )
     finally:
         if or_pool:
             or_pool.shutdown(wait=not timed_out, cancel_futures=timed_out)

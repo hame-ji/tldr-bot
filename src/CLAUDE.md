@@ -1,8 +1,8 @@
 # src/
 
-Last-Reviewed-Date: 2026-04-01
-Last-Reviewed-Commit: 680150e
-Review-Note: Pipeline outcome now exposes NotebookLM preflight/circuit-breaker/replay queue signals as the observability contract consumed by telemetry and workflows.
+Last-Reviewed-Date: 2026-04-07
+Last-Reviewed-Commit: 0d01b08
+Review-Note: Summarize batches keep diagnostics accurate on noop paths, and enforce mode preserves article overlap while keeping NotebookLM serial auth containment.
 
 Covers `src/` except `src/summarization/` and `src/telemetry/` (routed separately).
 

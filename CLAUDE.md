@@ -9,17 +9,17 @@ Markdown digest, delivers it back to Telegram. Runs on GitHub Actions — no ser
 
 ## Rules
 
-- Non-trivial work goes through GSD (`/gsd-*` commands).
+- Non-trivial work goes through GSD (`/gsd-`* commands).
 - Module-specific guidance lives in child `CLAUDE.md` files, not here.
 - The routing manifest below is an exception: it must live in this file because
-  `scripts/validate_claude_sync.py` parses it from here.
+`scripts/validate_claude_sync.py` parses it from here.
 - Resolve children via the routing manifest below (longest-prefix match).
 - Paths not covered by any route below have no required child doc; still follow GSD for
-  non-trivial work.
+non-trivial work.
 - If staged changes touch a routed path, the matched child `CLAUDE.md` must be edited in
-  the same commit with updated review headers (`Last-Reviewed-Date`,
-  `Last-Reviewed-Commit` as lowercase hex SHA 7-40 chars, `Review-Note`).
-  Pre-commit hook enforces this.
+the same commit with updated review headers (`Last-Reviewed-Date`,
+`Last-Reviewed-Commit` as lowercase hex SHA 7-40 chars, `Review-Note`).
+Pre-commit hook enforces this.
 
 ## GSD References (lazy-load)
 
@@ -28,6 +28,8 @@ Markdown digest, delivers it back to Telegram. Runs on GitHub Actions — no ser
 3. `.opencode/get-shit-done/workflows/<slug>.md` or `references/<name>.md` for procedures
 
 ## Routing Manifest
+
+
 
 <!-- CLAUDE_ROUTING_MANIFEST_START -->
 ```yaml
@@ -48,6 +50,8 @@ routing_manifest:
       claude: "tests/CLAUDE.md"
 ```
 <!-- CLAUDE_ROUTING_MANIFEST_END -->
+
+
 
 ## Setup
 

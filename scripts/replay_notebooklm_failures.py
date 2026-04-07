@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -16,6 +17,8 @@ from src.summarization.replay_queue import (
     load_pending_records,
     rewrite_pending_file,
 )
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _replay_one(record: dict[str, Any]) -> str:
@@ -40,8 +43,13 @@ def run_replay(
     recovered = 0
 
     for pending_path, records in grouped.items():
-        pending_date = date.fromisoformat(pending_path.stem)
+        try:
+            pending_date = date.fromisoformat(pending_path.stem)
+        except ValueError:
+            LOGGER.warning("Skipping malformed replay queue file: %s", pending_path)
+            continue
         remaining: list[dict[str, Any]] = []
+        completed_records: list[dict[str, Any]] = []
         for record in records:
             if limit > 0 and attempted >= limit:
                 remaining.append(record)
@@ -67,7 +75,6 @@ def run_replay(
                     base_dir=sources_base_dir,
                 )
                 out_path.write_text(summary + "\n", encoding="utf-8")
-                append_completed_record(record, base_dir=base_dir)
             except Exception as exc:  # noqa: BLE001
                 next_record = dict(record)
                 next_record["attempt_count"] = (
@@ -78,9 +85,12 @@ def run_replay(
                 remaining.append(next_record)
                 continue
 
+            completed_records.append(record)
             recovered += 1
 
         rewrite_pending_file(pending_path, remaining)
+        for record in completed_records:
+            append_completed_record(record, base_dir=base_dir)
 
     pending_remaining = sum(
         len(records) for records in load_pending_records(base_dir=base_dir).values()

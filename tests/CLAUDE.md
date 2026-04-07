@@ -1,8 +1,8 @@
 # tests/
 
-Last-Reviewed-Date: 2026-04-02
-Last-Reviewed-Commit: f29ddc5
-Review-Note: Added replay date-source and persistence-failure regression tests.
+Last-Reviewed-Date: 2026-04-07
+Last-Reviewed-Commit: 4853f3d
+Review-Note: Replay tests cover malformed pending filenames in addition to date-source and persistence-failure regressions.
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

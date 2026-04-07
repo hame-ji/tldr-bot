@@ -218,6 +218,47 @@ class ReplayRunnerTests(unittest.TestCase):
             self.assertEqual(all_records[0]["attempt_count"], 1)
             self.assertIn("disk full", all_records[0]["last_error"])
 
+    @patch("scripts.replay_notebooklm_failures.summarize_youtube")
+    @patch("scripts.replay_notebooklm_failures.load_prompt")
+    @patch("scripts.replay_notebooklm_failures.notebooklm_config_from_env")
+    def test_run_replay_skips_malformed_pending_filename(
+        self,
+        mock_notebooklm_config,
+        mock_load_prompt,
+        mock_summarize_youtube,
+    ) -> None:
+        class _Cfg:
+            youtube_prompt_path = "prompts/youtube_summarize.txt"
+            article_fallback_prompt_path = "prompts/summarize.txt"
+
+        mock_notebooklm_config.return_value = _Cfg()
+        mock_load_prompt.return_value = "prompt"
+        mock_summarize_youtube.return_value = "summary"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            enqueue_notebooklm_auth_failure(
+                run_date=date(2026, 4, 1),
+                url="https://youtu.be/recover",
+                kind="youtube",
+                reason="youtube_auth_expired",
+                source_failure_path="data/failed/2026-04-01/recover.md",
+                base_dir=tmpdir,
+            )
+            malformed_path = Path(tmpdir) / "pending" / "not-a-date.jsonl"
+            malformed_path.parent.mkdir(parents=True, exist_ok=True)
+            malformed_path.write_text('{"url": "https://youtu.be/bad"}\n', encoding="utf-8")
+
+            outcome = run_replay(
+                limit=0,
+                base_dir=tmpdir,
+                sources_base_dir=str(Path(tmpdir) / "sources"),
+            )
+
+            self.assertEqual(outcome["replay_attempted_count"], 1)
+            self.assertEqual(outcome["replay_recovered_count"], 1)
+            self.assertEqual(outcome["replay_pending_remaining_count"], 1)
+            self.assertTrue(malformed_path.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

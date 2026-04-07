@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, timezone
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 AUTH_FAILURE_REASONS = {
@@ -34,7 +35,18 @@ def _write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
         path.unlink(missing_ok=True)
         return
     lines = [json.dumps(record, sort_keys=True) for record in records]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    content = "\n".join(lines) + "\n"
+    with NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        dir=path.parent,
+        prefix=path.name + ".",
+        suffix=".tmp",
+        delete=False,
+    ) as handle:
+        handle.write(content)
+        temp_path = Path(handle.name)
+    temp_path.replace(path)
 
 
 def _append_jsonl(path: Path, record: dict[str, Any]) -> None:

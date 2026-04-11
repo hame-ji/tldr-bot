@@ -1,0 +1,19 @@
+Title: Beyond Prompting: The AI Mastery Framework
+
+TL;DR: True AI expertise requires moving beyond basic prompt engineering to develop strategic judgment, workflow integration, and systemic business vision.
+
+Key points:
+- AI mastery is evaluated across five distinct dimensions: strategy, specification (prompting), workflow integration, critical judgment, and systemic vision.
+- Technical prompt engineering offers the lowest long-term value because AI models are increasingly capable of interpreting vague instructions and optimizing their own prompts.
+- Most users hit a performance ceiling by treating AI as an isolated chatbot rather than designing continuous, automated workflows around multiple specialized models.
+- The baseline for basic AI competence is rising rapidly, meaning static certifications quickly lose value compared to continuous, practical workflow adaptation.
+
+Why it matters:
+- Focusing solely on software mechanics leads to skill obsolescence, whereas cultivating critical evaluation and system-level integration creates scalable, long-lasting organizational value.
+
+Evidence:
+- A 2023 Harvard and BCG study demonstrated that AI adoption boosted the results of lower-performing profiles by 43%, compared to a 17% improvement for higher performers.
+- A 2025 Deloitte report noted a 50% jump in employee access to AI tools, highlighting the rapid elevation of baseline industry expectations.
+
+Caveat:
+- The 20-level proficiency scale and weighted skill coefficients presented are based on the creator's personal methodology rather than an established, standardized industry framework.

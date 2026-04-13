@@ -1,5 +1,5 @@
 {
-  "fetched_at": 1775722983.3811188,
+  "fetched_at": 1776071106.276269,
   "models": [
     "google/gemma-3-27b-it:free",
     "qwen/qwen3-next-80b-a3b-instruct:free",
@@ -16,7 +16,6 @@
     "nvidia/nemotron-3-nano-30b-a3b:free",
     "openrouter/free",
     "minimax/minimax-m2.5:free",
-    "arcee-ai/trinity-mini:free",
     "openai/gpt-oss-120b:free",
     "openai/gpt-oss-20b:free",
     "z-ai/glm-4.5-air:free",

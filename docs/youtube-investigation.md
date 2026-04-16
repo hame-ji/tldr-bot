@@ -60,18 +60,18 @@ Pasting a YouTube URL into Gemini (tested via the web UI) resulted in the model 
 
 **Validated end-to-end:** We tested `https://youtu.be/l8pQeVVaqpY` via the `notebooklm` CLI:
 
-```
-notebooklm create "test-yt"
+```bash
+uv run notebooklm create "test-yt"
 # → Created notebook: ad16e0d3-6686-49ce-abc5-37ca8051809c
-notebooklm source add "https://youtu.be/l8pQeVVaqpY"
-notebooklm ask "Summarize this video in key points"
+uv run notebooklm source add "https://youtu.be/l8pQeVVaqpY"
+uv run notebooklm ask "Summarize this video in key points"
 ```
 
 The summary was accurate and specific, confirming that NotebookLM correctly accessed and understood the video content.
 
 **Trade-offs:**
 - Requires a Google account and a saved auth session (`storage_state.json`)
-- Auth sessions expire periodically — renewal is manual (`notebooklm login`)
+- Auth sessions expire periodically — renewal is manual (`uv run notebooklm login`)
 - Uses undocumented Google APIs that may change without notice
 - Each video summarization creates and deletes a temporary notebook (overhead: a few extra API calls)
 - Not suitable if the Google account is rate-limited or suspended

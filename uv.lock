@@ -252,16 +252,16 @@ wheels = [
 
 [[package]]
 name = "notebooklm-py"
-version = "0.3.4"
+version = "0.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
     { name = "httpx" },
     { name = "rich" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/89/0d/b6fc53016dcfc4305f89d157a29ed09bc471f65b9b83c2affe66694db7bb/notebooklm_py-0.3.4.tar.gz", hash = "sha256:dc72f89b1eb4c0efbad8641a0ec83da2e631c5a926e029a93a258b0032b503c4", size = 8007875, upload-time = "2026-03-12T03:03:57.969Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e7/9b/54306fba7da147af6131f8bd72145b3d08c3ac783bda4bf33a3c5737f9e6/notebooklm_py-0.4.1.tar.gz", hash = "sha256:d429473c811b29f558e43becceac4b3b6c0d648b4e33eb63b7df732893aa03cf", size = 8170603, upload-time = "2026-05-11T23:17:48.938Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/31/1f/73b1bb084dddb3e9b6387db2779496d90c2c34dc4685f1f2c81f07880d0d/notebooklm_py-0.3.4-py3-none-any.whl", hash = "sha256:da54004f546d6409c01b474d18d031afc13a02254e2cb383dd6ee3e0974f5b47", size = 168780, upload-time = "2026-03-12T03:03:56.003Z" },
+    { url = "https://files.pythonhosted.org/packages/50/13/bc345155510b9ae983316c8c5e16f7566589218e3417ebc41185b0660e44/notebooklm_py-0.4.1-py3-none-any.whl", hash = "sha256:4c2c04f3bf4c01dba871e831bad526d49f5a5992e8ace44bbf5c61efaebc3dc5", size = 221599, upload-time = "2026-05-11T23:17:47.054Z" },
 ]
 
 [[package]]
@@ -271,6 +271,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b0/77/a5b8c569bf593b0140bde72ea885a803b82086995367bf2037de0159d924/pygments-2.19.2.tar.gz", hash = "sha256:636cb2477cec7f8952536970bc533bc43743542f70392ae026374600add5b887", size = 4968631, upload-time = "2025-06-21T13:39:12.283Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c7/21/705964c7812476f378728bdf590ca4b771ec72385c533964653c68e86bdc/pygments-2.19.2-py3-none-any.whl", hash = "sha256:86540386c03d588bb81d44bc3928634ff26449851e99741617ecb9037ee5ec0b", size = 1225217, upload-time = "2025-06-21T13:39:07.939Z" },
+]
+
+[[package]]
+name = "pypdf"
+version = "5.4.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/43/4026f6ee056306d0e0eb04fcb9f2122a0f1a5c57ad9dc5e0d67399e47194/pypdf-5.4.0.tar.gz", hash = "sha256:9af476a9dc30fcb137659b0dec747ea94aa954933c52cf02ee33e39a16fe9175", size = 5012492, upload-time = "2025-03-16T09:44:11.656Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0b/27/d83f8f2a03ca5408dc2cc84b49c0bf3fbf059398a6a2ea7c10acfe28859f/pypdf-5.4.0-py3-none-any.whl", hash = "sha256:db994ab47cadc81057ea1591b90e5b543e2b7ef2d0e31ef41a9bfe763c119dab", size = 302306, upload-time = "2025-03-16T09:44:09.757Z" },
 ]
 
 [[package]]
@@ -392,6 +401,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "lxml-html-clean" },
     { name = "notebooklm-py" },
+    { name = "pypdf" },
     { name = "python-slugify" },
     { name = "requests" },
     { name = "trafilatura" },
@@ -400,7 +410,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "lxml-html-clean", specifier = "==0.4.4" },
-    { name = "notebooklm-py", specifier = "==0.3.4" },
+    { name = "notebooklm-py", specifier = "==0.4.1" },
+    { name = "pypdf", specifier = "==5.4.0" },
     { name = "python-slugify", specifier = "==8.0.4" },
     { name = "requests", specifier = "==2.32.5" },
     { name = "trafilatura", specifier = "==1.12.2" },

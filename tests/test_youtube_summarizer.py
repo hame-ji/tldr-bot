@@ -132,6 +132,40 @@ class NotebookLMPreflightTests(unittest.TestCase):
 
         self.assertEqual(status, NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR)
 
+    @patch("src.summarization.notebooklm_backend._resolve_storage_path")
+    @patch("src.summarization.notebooklm_backend.NotebookLMClient")
+    def test_preflight_maps_auth_value_error_to_auth_expired(
+        self,
+        mock_client_cls,
+        mock_resolve,
+    ) -> None:
+        mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
+        mock_client_cls.from_storage = AsyncMock(
+            side_effect=ValueError(
+                "Authentication expired or invalid. Run 'notebooklm login'"
+            )
+        )
+
+        status = check_notebooklm_auth()
+
+        self.assertEqual(status, NOTEBOOKLM_PREFLIGHT_AUTH_EXPIRED)
+
+    @patch("src.summarization.notebooklm_backend._resolve_storage_path")
+    @patch("src.summarization.notebooklm_backend.NotebookLMClient")
+    def test_preflight_keeps_non_auth_value_error_as_backend_error(
+        self,
+        mock_client_cls,
+        mock_resolve,
+    ) -> None:
+        mock_resolve.return_value = ("/tmp/notebooklm/storage_state.json", False)
+        mock_client_cls.from_storage = AsyncMock(
+            side_effect=ValueError("unexpected parser failure")
+        )
+
+        status = check_notebooklm_auth()
+
+        self.assertEqual(status, NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR)
+
     @patch(
         "src.summarization.notebooklm_backend._NOTEBOOKLM_PREFLIGHT_TIMEOUT_SECONDS",
         0.01,

@@ -1,8 +1,8 @@
 # tests/
 
-Last-Reviewed-Date: 2026-04-07
-Last-Reviewed-Commit: 0d01b08
-Review-Note: Summarizer regressions cover noop diagnostics and enforce-mode overlap, and replay tests cover malformed pending filenames.
+Last-Reviewed-Date: 2026-05-12
+Last-Reviewed-Commit: d182cea
+Review-Note: NotebookLM preflight tests cover auth-like ValueError classification separately from non-auth backend failures.
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

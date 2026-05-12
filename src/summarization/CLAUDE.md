@@ -1,8 +1,8 @@
 # src/summarization/
 
-Last-Reviewed-Date: 2026-04-07
-Last-Reviewed-Commit: 4853f3d
-Review-Note: Replay queue file writes are atomic so replay failures do not leave partially rewritten pending files.
+Last-Reviewed-Date: 2026-05-12
+Last-Reviewed-Commit: d182cea
+Review-Note: NotebookLM auth preflight maps upstream auth-like ValueError failures to auth_expired while preserving backend_error for non-auth failures.
 
 - `Summarizer` protocol in `common.py` defines the contract. Backends implement it.
 - `notebooklm_backend.py`: NotebookLM backend for YouTube summarization and article fallback. Exposes `summarize_url()`, `summarize_youtube()`, and typed error classes.

@@ -153,6 +153,28 @@ def _classify_preflight_storage_error(exc: NotebookLMSummaryError) -> str:
     return NOTEBOOKLM_PREFLIGHT_AUTH_EXPIRED
 
 
+def _is_auth_related_value_error(exc: ValueError) -> bool:
+    message = str(exc).lower()
+    markers = (
+        "auth",
+        "login",
+        "cookie",
+        "session",
+        "re-authenticate",
+        "redirected to",
+        "missing required cookies",
+    )
+    return any(marker in message for marker in markers)
+
+
+def _classify_preflight_runtime_exception(exc: Exception) -> str:
+    if isinstance(exc, AuthError):
+        return NOTEBOOKLM_PREFLIGHT_AUTH_EXPIRED
+    if isinstance(exc, ValueError) and _is_auth_related_value_error(exc):
+        return NOTEBOOKLM_PREFLIGHT_AUTH_EXPIRED
+    return NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR
+
+
 def check_notebooklm_auth() -> str:
     result: str = NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR
 
@@ -191,14 +213,24 @@ async def _check_notebooklm_auth_async() -> str:
             timeout=_NOTEBOOKLM_PREFLIGHT_TIMEOUT_SECONDS,
         )
         return NOTEBOOKLM_PREFLIGHT_OK
-    except asyncio.TimeoutError:
-        return NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR
-    except AuthError:
-        return NOTEBOOKLM_PREFLIGHT_AUTH_EXPIRED
-    except NotebookLMError:
-        return NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR
-    except Exception:
-        return NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR
+    except asyncio.TimeoutError as exc:
+        status = NOTEBOOKLM_PREFLIGHT_BACKEND_ERROR
+        LOGGER.warning(
+            "NotebookLM auth preflight failed status=%s exception=%s message=%s",
+            status,
+            type(exc).__name__,
+            exc,
+        )
+        return status
+    except Exception as exc:
+        status = _classify_preflight_runtime_exception(exc)
+        LOGGER.warning(
+            "NotebookLM auth preflight failed status=%s exception=%s message=%s",
+            status,
+            type(exc).__name__,
+            exc,
+        )
+        return status
     finally:
         _cleanup_temp_storage(storage_path, cleanup_storage_file)
 

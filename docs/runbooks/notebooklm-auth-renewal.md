@@ -41,14 +41,14 @@ Run this playbook when one or more are true:
 1. Refresh local NotebookLM session.
 
    ```bash
-   notebooklm login
+   uv run notebooklm login
    ```
 
 2. Validate the refreshed state file exists and is valid JSON.
 
    ```bash
    test -f ~/.notebooklm/storage_state.json
-   python -m json.tool ~/.notebooklm/storage_state.json >/dev/null
+   uv run python -m json.tool ~/.notebooklm/storage_state.json >/dev/null
    ```
 
 3. Rotate `NOTEBOOKLM_STORAGE_STATE` in GitHub Actions.

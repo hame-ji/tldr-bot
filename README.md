@@ -89,42 +89,43 @@ User -> Telegram Bot
 - Successful runs with output changes create a standard daily commit and push it
 - Telemetry and run-history reporting are non-blocking; they do not prevent digest persistence
 
-## Local verification
+## Local environment setup
 
 Install `uv` first: https://docs.astral.sh/uv/getting-started/installation/
 
 ```bash
-uv sync --frozen
-uv run python -m unittest discover -s tests -p "test_*.py"
-uv run python -m src
+make setup
 ```
 
-Enable repository hooks once per clone:
+`make setup` syncs dependencies, installs the browser runtime used by local automation flows, and enables repository hooks.
 
-```bash
-git config core.hooksPath .githooks
-```
+Set the environment variables required by your local run.
 
-Required environment variables:
+Minimum baseline:
 
 - `TELEGRAM_BOT_TOKEN`
 - `TELEGRAM_CHAT_ID`
 - `OPENROUTER_API_KEY`
 
-NotebookLM authentication is also required for YouTube summarization and NotebookLM article fallback. Configure one of:
+## Local verification
 
-- `NOTEBOOKLM_STORAGE_STATE`, or
-- `NOTEBOOKLM_STORAGE_PATH`, or
-- local `~/.notebooklm/storage_state.json` from `notebooklm login`
+```bash
+uv run python -m unittest discover -s tests -p "test_*.py"
+uv run python -m src
+```
 
-Optional NotebookLM auth preflight mode:
+Common shortcuts:
 
-- `NOTEBOOKLM_PREFLIGHT_MODE` = `enforce` (workflow default), `observe`, or `off`
+```bash
+make test
+make run
+```
 
-Replay recovery workflow:
+Common setup issues:
 
-- run `.github/workflows/replay-notebooklm.yml` manually after credential refresh
-- replay queue artifacts live under `data/replay/notebooklm/pending/` and `data/replay/notebooklm/completed/`
+- Python version mismatch (`requires-python >=3.11,<3.12`)
+- Missing environment variables
+- Lockfile drift (rerun `uv sync --frozen`)
 
 ## Documentation
 

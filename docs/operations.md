@@ -47,7 +47,7 @@ This playbook covers the common failures for the live workflow in `.github/workf
 - Acknowledge:
   - Workflow warning annotation appears when `notebooklm_auth_incident=true`.
 - Remediate:
-  - Run `notebooklm login` locally.
+  - Run `uv run notebooklm login` locally.
   - Update `NOTEBOOKLM_STORAGE_STATE` secret with fresh storage state JSON.
 - Validate:
   - Manual rerun reports `NotebookLM preflight status: ok` and `NotebookLM auth failures: 0`.

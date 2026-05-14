@@ -1,10 +1,11 @@
 {
-  "fetched_at": 1778665729.5123045,
+  "fetched_at": 1778751457.1933432,
   "models": [
     "qwen/qwen3-next-80b-a3b-instruct:free",
     "meta-llama/llama-3.2-3b-instruct:free",
     "meta-llama/llama-3.3-70b-instruct:free",
     "qwen/qwen3-coder:free",
+    "deepseek/deepseek-v4-flash:free",
     "nousresearch/hermes-3-llama-3.1-405b:free",
     "liquid/lfm-2.5-1.2b-instruct:free",
     "openrouter/owl-alpha",

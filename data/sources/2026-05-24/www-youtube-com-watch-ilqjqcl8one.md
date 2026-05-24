@@ -1,0 +1,20 @@
+Title: Scaling Claude Code with HTML Specs and Agent-Native Verification
+
+TL;DR: Transitioning from markdown to HTML specifications and exposing application state directly to the DOM enables AI agents to gather requirements more effectively and natively verify code execution.
+
+Key points:
+- Replace traditional markdown specification files with HTML to provide agents with denser, more ergonomic context that ultimately reduces long-term iteration.
+- Leverage interactive tools like "ask user question" to allow the AI to extract latent requirements from the user rather than relying entirely on upfront manual specification.
+- Publish internal application state directly to the DOM using data attributes so agents can read data contracts and run verifications without brittle web scraping.
+- Execute verification manifests directly in the browser or headlessly via CLI, automatically recording the test outcomes as shareable video clips.
+- Optimize agent workflows in Claude Code by utilizing auto mode, enabling fast mode for rapid spec iteration, and setting the effort parameter to high.
+
+Why it matters:
+- As autonomous agents execute more complex and long-running tasks, embedding verifiable state in the DOM and providing richer HTML specifications prevents costly token waste caused by incorrect code paths.
+
+Evidence:
+- The internal Claude Code team actively records their frontend code changes by running automated DOM-based verifications and storing the resulting video proof to S3.
+- Claude Opus 4.7 is explicitly recommended over Sonnet for extracting requirements and processing these HTML specs due to its superior vision capabilities.
+
+Caveat:
+- Generating comprehensive HTML specifications initially consumes more tokens than standard markdown, though the presenter asserts this cost is offset by fewer required iterations over the project lifecycle.

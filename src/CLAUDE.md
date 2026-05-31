@@ -1,8 +1,8 @@
 # src/
 
 Last-Reviewed-Date: 2026-05-31
-Last-Reviewed-Commit: d2177d2
-Review-Note: extract_urls now validates URL scheme (http/https only) as defense-in-depth against non-web schemes.
+Last-Reviewed-Commit: f658f87
+Review-Note: url_to_slug canonicalizes YouTube hosts to youtube.com and uses query hashes for articles so dedup handles alternate YT forms and survives 80-char truncation.
 
 Covers `src/` except `src/summarization/` and `src/telemetry/` (routed separately).
 

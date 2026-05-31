@@ -1,11 +1,13 @@
 import io
 import json
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import patch
 
-from src.main import run_pipeline
+from src.main import _filter_already_processed_urls, run_pipeline
 
 
 def _mock_summarize_items(results, diag=None):
@@ -16,6 +18,48 @@ def _mock_summarize_items(results, diag=None):
             diagnostics.update(diag)
         return results
     return _side_effect
+
+
+class UrlDeduplicationTests(unittest.TestCase):
+    def test_filter_returns_all_urls_when_no_sources_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            urls = ["https://example.com/a", "https://example.com/b"]
+            result = _filter_already_processed_urls(urls, sources_base_dir=tmpdir + "/nonexistent")
+            self.assertEqual(result, urls)
+
+    def test_filter_skips_urls_with_existing_summary_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            date_dir = Path(tmpdir) / "2026-03-15"
+            date_dir.mkdir()
+            (date_dir / "example-com-a.md").write_text("summary", encoding="utf-8")
+
+            urls = ["https://example.com/a", "https://example.com/b"]
+            result = _filter_already_processed_urls(urls, sources_base_dir=tmpdir)
+
+            self.assertEqual(result, ["https://example.com/b"])
+
+    def test_filter_returns_all_urls_when_no_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            date_dir = Path(tmpdir) / "2026-03-15"
+            date_dir.mkdir()
+            (date_dir / "other-com-x.md").write_text("summary", encoding="utf-8")
+
+            urls = ["https://example.com/a", "https://example.com/b"]
+            result = _filter_already_processed_urls(urls, sources_base_dir=tmpdir)
+
+            self.assertEqual(result, urls)
+
+    def test_filter_checks_all_date_subdirectories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            (Path(tmpdir) / "2026-03-14").mkdir()
+            (Path(tmpdir) / "2026-03-14" / "example-com-old.md").write_text("s", encoding="utf-8")
+            (Path(tmpdir) / "2026-03-15").mkdir()
+            (Path(tmpdir) / "2026-03-15" / "example-com-new.md").write_text("s", encoding="utf-8")
+
+            urls = ["https://example.com/old", "https://example.com/new", "https://example.com/fresh"]
+            result = _filter_already_processed_urls(urls, sources_base_dir=tmpdir)
+
+            self.assertEqual(result, ["https://example.com/fresh"])
 
 
 class MainPipelineOutcomeTests(unittest.TestCase):

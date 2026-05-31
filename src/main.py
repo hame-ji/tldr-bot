@@ -5,7 +5,10 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
+from pathlib import Path
+
 from src._types import PipelineOutcome
+from src._url_utils import url_to_slug
 from src.content_fetcher import fetch_urls
 from src.digest_generator import generate_digest
 from src.summarizer import summarize_items
@@ -13,6 +16,22 @@ from src.telegram_client import poll_urls_from_env, send_digest_from_env
 from src.telemetry.run_metrics import build_run_metrics, to_log_line
 
 _SUMMARIZABLE_KINDS = {"article", "youtube"}
+
+
+def _filter_already_processed_urls(
+    urls: list[str],
+    sources_base_dir: str = "data/sources",
+) -> list[str]:
+    base = Path(sources_base_dir)
+    if not base.exists():
+        return urls
+    seen_slugs: set[str] = set()
+    for date_dir in base.iterdir():
+        if not date_dir.is_dir():
+            continue
+        for summary_file in date_dir.glob("*.md"):
+            seen_slugs.add(summary_file.stem)
+    return [url for url in urls if url_to_slug(url) not in seen_slugs]
 
 
 def _empty_outcome(**overrides: Any) -> PipelineOutcome:
@@ -49,7 +68,12 @@ def _run_pipeline_with_context(
         f"updates={result['update_count']} previous_offset={result['previous_offset']} next_offset={result['next_offset']}"
     )
 
-    if len(result["urls"]) == 0:
+    urls = _filter_already_processed_urls(result["urls"])
+    dedup_count = len(result["urls"]) - len(urls)
+    if dedup_count > 0:
+        print(f"dedup: skipped {dedup_count} already-processed URL(s)")
+
+    if len(urls) == 0:
         print("no_urls_processed; skipping digest generation and delivery")
         return (
             _empty_outcome(),
@@ -58,7 +82,7 @@ def _run_pipeline_with_context(
             run_date.isoformat(),
         )
 
-    fetch_results = fetch_urls(result["urls"])
+    fetch_results = fetch_urls(urls)
     for item in fetch_results:
         if item["status"] == "ok":
             print(f"ok:{item['kind']}:{item['url']}")

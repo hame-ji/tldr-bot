@@ -1,8 +1,8 @@
 # src/
 
-Last-Reviewed-Date: 2026-04-07
-Last-Reviewed-Commit: 0d01b08
-Review-Note: Summarize batches keep diagnostics accurate on noop paths, and enforce mode preserves article overlap while keeping NotebookLM serial auth containment.
+Last-Reviewed-Date: 2026-05-31
+Last-Reviewed-Commit: fff887a
+Review-Note: Digest template now uses regex-based {{var}} substitution instead of .replace() chain, preventing corruption when summaries contain double-brace text.
 
 Covers `src/` except `src/summarization/` and `src/telemetry/` (routed separately).
 

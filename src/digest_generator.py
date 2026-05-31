@@ -1,8 +1,11 @@
+import re
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 from src._prompts import load_prompt
+
+_TEMPLATE_VAR_PATTERN = re.compile(r"\{\{(\w+)\}\}")
 
 
 def _render_digest(
@@ -49,13 +52,17 @@ def _render_digest(
     if failed_lines:
         failed_section = "## Failed URLs\n\n" + "\n".join(failed_lines)
 
-    rendered = (
-        prompt.replace("{{date}}", run_date.isoformat())
-        .replace("{{summary_count}}", str(len(successful)))
-        .replace("{{failure_count}}", str(len(failed)))
-        .replace("{{ignored_count}}", str(len(ignored)))
-        .replace("{{summaries}}", summaries_text)
-        .replace("{{failed_urls_section}}", failed_section)
+    variables = {
+        "date": run_date.isoformat(),
+        "summary_count": str(len(successful)),
+        "failure_count": str(len(failed)),
+        "ignored_count": str(len(ignored)),
+        "summaries": summaries_text,
+        "failed_urls_section": failed_section,
+    }
+    rendered = _TEMPLATE_VAR_PATTERN.sub(
+        lambda m: variables.get(m.group(1), m.group(0)),
+        prompt,
     ).strip()
 
     if failed_section and "## Failed URLs" not in rendered:

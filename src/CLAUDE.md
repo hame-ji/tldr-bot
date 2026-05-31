@@ -1,8 +1,8 @@
 # src/
 
 Last-Reviewed-Date: 2026-05-31
-Last-Reviewed-Commit: fff887a
-Review-Note: Digest template now uses regex-based {{var}} substitution instead of .replace() chain, preventing corruption when summaries contain double-brace text.
+Last-Reviewed-Commit: 194e94c
+Review-Note: User-Agent is now configurable via USER_AGENT env var with Chrome 136 as default, preventing stale UA blocking.
 
 Covers `src/` except `src/summarization/` and `src/telemetry/` (routed separately).
 

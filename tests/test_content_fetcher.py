@@ -15,6 +15,7 @@ from src.content_fetcher import (
     TLS_ERROR,
     classify_url,
     fetch_url,
+    fetch_urls,
     normalize_url_for_fetch,
     url_to_slug,
     write_failure_record,
@@ -149,6 +150,25 @@ class ContentFetcherTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "failed")
         self.assertEqual(result["reason"], PDF_EXTRACT_FAILED)
+
+
+    @patch("src.content_fetcher.fetch_url")
+    def test_fetch_urls_returns_results_in_input_order(self, mock_fetch_url) -> None:
+        def fake_fetch(url: str, failed_base_dir: str = "data/failed") -> dict:
+            kind = "youtube" if "youtu" in url else "article"
+            return {"status": "ok", "kind": kind, "url": url}
+
+        mock_fetch_url.side_effect = fake_fetch
+
+        results = fetch_urls(["https://a.example", "https://b.example", "https://youtu.be/xyz"])
+
+        self.assertEqual(len(results), 3)
+        self.assertEqual(results[0]["url"], "https://a.example")
+        self.assertEqual(results[1]["url"], "https://b.example")
+        self.assertEqual(results[2]["url"], "https://youtu.be/xyz")
+
+    def test_fetch_urls_returns_empty_list_for_no_urls(self) -> None:
+        self.assertEqual(fetch_urls([]), [])
 
 
 if __name__ == "__main__":

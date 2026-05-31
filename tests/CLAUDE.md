@@ -1,8 +1,8 @@
 # tests/
 
 Last-Reviewed-Date: 2026-05-31
-Last-Reviewed-Commit: d2177d2
-Review-Note: Content fetcher tests now cover concurrent fetch_urls behavior (input order preservation, empty input handling).
+Last-Reviewed-Commit: d2f5a24
+Review-Note: Run history tests now verify metrics caching behavior (cache hit skips download, cache miss triggers download and write).
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

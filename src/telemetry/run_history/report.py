@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any, Optional
 
 from .github_client import GitHubActionsClient
@@ -91,11 +93,32 @@ def build_current_snapshot(
     )
 
 
+def _cache_path_for_run_id(run_id: int, cache_dir: str) -> Path:
+    return Path(cache_dir) / f"{run_id}.json"
+
+
+def _read_cached_metrics(run_id: int, cache_dir: str) -> Optional[dict[str, Any]]:
+    path = _cache_path_for_run_id(run_id, cache_dir)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
+def _write_cached_metrics(run_id: int, cache_dir: str, metrics: dict[str, Any]) -> None:
+    path = _cache_path_for_run_id(run_id, cache_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(metrics), encoding="utf-8")
+
+
 def fetch_history_snapshots(
     client: GitHubActionsClient,
     workflow_file: str,
     current_run_id: int,
     limit: int,
+    cache_dir: str = "data/cache/run_metrics",
 ) -> list[RunHistorySnapshot]:
     if limit <= 0:
         return []
@@ -114,12 +137,15 @@ def fetch_history_snapshots(
         fallback_date = created_at[:10] if len(created_at) >= 10 else "unknown"
         conclusion = str(run.get("conclusion", "completed"))
 
-        metrics: Optional[dict[str, Any]]
-        try:
-            logs_zip = client.download_run_logs_zip(run_id=run_id)
-            metrics = extract_run_metrics_from_logs_zip(logs_zip)
-        except Exception:  # noqa: BLE001
-            metrics = None
+        metrics: Optional[dict[str, Any]] = _read_cached_metrics(run_id, cache_dir)
+        if metrics is None:
+            try:
+                logs_zip = client.download_run_logs_zip(run_id=run_id)
+                metrics = extract_run_metrics_from_logs_zip(logs_zip)
+                if metrics is not None:
+                    _write_cached_metrics(run_id, cache_dir, metrics)
+            except Exception:  # noqa: BLE001
+                metrics = None
 
         snapshots.append(
             _snapshot_from_metrics(

@@ -1,7 +1,9 @@
 import io
 import json
+import tempfile
 import unittest
 import zipfile
+from pathlib import Path
 
 from src.telemetry.run_history.models import RunHistorySnapshot
 from src.telemetry.run_history.parser import (
@@ -216,6 +218,52 @@ class RunHistoryFetchTests(unittest.TestCase):
         self.assertEqual(len(snapshots), 1)
         self.assertEqual(snapshots[0].run_number, 29)
         self.assertFalse(snapshots[0].metrics_available)
+
+
+    def test_fetch_history_snapshots_uses_cached_metrics_when_available(self) -> None:
+        class FakeClient:
+            def __init__(self) -> None:
+                self.download_count = 0
+
+            def list_workflow_runs(self, workflow_file: str, per_page: int = 30):  # noqa: ANN001
+                return [
+                    {"id": 299, "run_number": 29, "status": "completed", "conclusion": "success", "created_at": "2026-03-19T07:00:00Z"},
+                ]
+
+            def download_run_logs_zip(self, run_id: int) -> bytes:
+                self.download_count += 1
+                stream = io.BytesIO()
+                with zipfile.ZipFile(stream, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+                    archive.writestr(
+                        "job/1.txt",
+                        'run_metrics:{"metrics_version":1,"digest_date":"2026-03-19","processed_urls":5,"pipeline_seconds":100.0,"seconds_per_processed_url":20.0,"fetch_failed_count":0}',
+                    )
+                return stream.getvalue()
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            client = FakeClient()
+
+            snapshots_first = fetch_history_snapshots(
+                client=client,
+                workflow_file="digest.yml",
+                current_run_id=300,
+                limit=3,
+                cache_dir=tmpdir,
+            )
+            self.assertEqual(len(snapshots_first), 1)
+            self.assertTrue(snapshots_first[0].metrics_available)
+            self.assertEqual(client.download_count, 1)
+
+            snapshots_second = fetch_history_snapshots(
+                client=client,
+                workflow_file="digest.yml",
+                current_run_id=300,
+                limit=3,
+                cache_dir=tmpdir,
+            )
+            self.assertEqual(len(snapshots_second), 1)
+            self.assertTrue(snapshots_second[0].metrics_available)
+            self.assertEqual(client.download_count, 1)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 # src/telemetry/
 
-Last-Reviewed-Date: 2026-04-01
-Last-Reviewed-Commit: 680150e
-Review-Note: Parser/output contract now includes NotebookLM preflight incident signals and replay/circuit-breaker counters with fail-soft defaults.
+Last-Reviewed-Date: 2026-05-31
+Last-Reviewed-Commit: d2f5a24
+Review-Note: fetch_history_snapshots now caches downloaded run metrics by run_id to avoid redundant log zip downloads on subsequent runs.
 
 - `run_metrics.py`: frozen `RunMetrics` dataclass emitted as `run_metrics:` JSON log line. `metrics_version=1`.
 - `pipeline_log_parser.py`: extracts `run_outcome:` and `run_metrics:` from pipeline stdout. Tolerant on missing metrics (fills "unknown"). Used by CI to set workflow outputs.

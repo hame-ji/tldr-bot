@@ -1,8 +1,8 @@
 # tests/
 
 Last-Reviewed-Date: 2026-05-31
-Last-Reviewed-Commit: cd14525
-Review-Note: Telegram client tests now verify atomic save_offset behavior (no temp file left behind after write).
+Last-Reviewed-Commit: af6e7ff
+Review-Note: Telegram client tests now cover send_digest retry behavior (transient failure recovery, max retries exhaustion).
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

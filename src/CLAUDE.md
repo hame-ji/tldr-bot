@@ -1,8 +1,8 @@
 # src/
 
 Last-Reviewed-Date: 2026-05-31
-Last-Reviewed-Commit: cd14525
-Review-Note: save_offset now uses atomic write (temp file + replace) to prevent state corruption from partial writes.
+Last-Reviewed-Commit: af6e7ff
+Review-Note: send_digest now retries sendMessage on transient RequestException (3 attempts, 5s backoff) to prevent lost digests on Telegram outages.
 
 Covers `src/` except `src/summarization/` and `src/telemetry/` (routed separately).
 

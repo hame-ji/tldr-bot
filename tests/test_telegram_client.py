@@ -4,6 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import requests
+
 from src.telegram_client import chunk_text_by_paragraph, extract_urls, load_offset, poll_urls, save_offset, send_digest
 
 
@@ -183,6 +185,34 @@ class TelegramClientTests(unittest.TestCase):
         self.assertIn("<b>Item 1</b>", sent_texts[0])
         self.assertIn("<b>Item 2</b>", sent_texts[-1])
         self.assertNotIn("<b>Item 2</b>", "\n".join(sent_texts[:-1]))
+
+
+    @patch("src.telegram_client._telegram_api")
+    def test_send_digest_retries_on_transient_failure(self, mock_api) -> None:
+        mock_api.side_effect = [
+            requests.exceptions.ConnectionError("connection refused"),
+            {"ok": True, "result": {"message_id": 1}},
+        ]
+
+        responses = send_digest(
+            bot_token="token", chat_id=123, digest_text="hello",
+            retry_backoff_seconds=0.01,
+        )
+
+        self.assertEqual(len(responses), 1)
+        self.assertEqual(mock_api.call_count, 2)
+
+    @patch("src.telegram_client._telegram_api")
+    def test_send_digest_raises_after_max_retries(self, mock_api) -> None:
+        mock_api.side_effect = requests.exceptions.ConnectionError("connection refused")
+
+        with self.assertRaises(requests.exceptions.ConnectionError):
+            send_digest(
+                bot_token="token", chat_id=123, digest_text="hello",
+                max_retries=2, retry_backoff_seconds=0.01,
+            )
+
+        self.assertEqual(mock_api.call_count, 2)
 
 
 if __name__ == "__main__":

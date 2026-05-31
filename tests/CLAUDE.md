@@ -1,8 +1,8 @@
 # tests/
 
 Last-Reviewed-Date: 2026-05-31
-Last-Reviewed-Commit: d2177d2
-Review-Note: CI script tests now cover commit_strategy.py entrypoint (skip on zero processed URLs, missing log file handling).
+Last-Reviewed-Commit: cd14525
+Review-Note: Telegram client tests now verify atomic save_offset behavior (no temp file left behind after write).
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

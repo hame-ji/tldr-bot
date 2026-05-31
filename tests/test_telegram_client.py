@@ -26,6 +26,14 @@ class TelegramClientTests(unittest.TestCase):
             save_offset(538711799, state_path)
             self.assertEqual(load_offset(state_path), 538711799)
 
+    def test_save_offset_does_not_leave_temp_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            state_path = Path(tmpdir) / "state.json"
+            save_offset(12345, state_path)
+            temp_path = state_path.with_suffix(".tmp")
+            self.assertFalse(temp_path.exists())
+            self.assertEqual(load_offset(state_path), 12345)
+
     @patch("src.telegram_client.get_updates")
     def test_poll_urls_advances_offset_plus_one(self, mock_get_updates) -> None:
         mock_get_updates.return_value = [

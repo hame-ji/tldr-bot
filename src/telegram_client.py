@@ -34,7 +34,10 @@ def load_offset(state_path: str | Path = "state.json") -> int | None:
 def save_offset(offset: int, state_path: str | Path = "state.json") -> None:
     path = Path(state_path)
     payload = {"telegram_offset": offset}
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    content = json.dumps(payload, indent=2) + "\n"
+    temp_path = path.with_suffix(".tmp")
+    temp_path.write_text(content, encoding="utf-8")
+    temp_path.replace(path)
 
 
 def extract_urls(text: str) -> list[str]:

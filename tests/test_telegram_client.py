@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.telegram_client import chunk_text_by_paragraph, extract_urls, load_offset, poll_urls, save_offset, send_digest
+from src.telegram_client import _format_digest_line_as_html, chunk_text_by_paragraph, extract_urls, load_offset, poll_urls, save_offset, send_digest
 
 
 class TelegramClientTests(unittest.TestCase):
@@ -175,6 +175,32 @@ class TelegramClientTests(unittest.TestCase):
         self.assertIn("<b>Item 1</b>", sent_texts[0])
         self.assertIn("<b>Item 2</b>", sent_texts[-1])
         self.assertNotIn("<b>Item 2</b>", "\n".join(sent_texts[:-1]))
+
+
+    def test_format_digest_line_handles_bold_inside_link(self) -> None:
+        line = "[**bold link**](https://example.com)"
+        result = _format_digest_line_as_html(line)
+        self.assertIn("<b>bold link</b>", result)
+        self.assertIn('href="https://example.com"', result)
+
+    def test_format_digest_line_handles_unicode_characters(self) -> None:
+        line = "**日本語テスト** 🎉 émojis"
+        result = _format_digest_line_as_html(line)
+        self.assertIn("<b>日本語テスト</b>", result)
+        self.assertIn("🎉", result)
+        self.assertIn("émojis", result)
+
+    def test_format_digest_line_handles_very_long_lines(self) -> None:
+        long_text = "x" * 10000
+        line = f"**{long_text}**"
+        result = _format_digest_line_as_html(line)
+        self.assertIn(f"<b>{long_text}</b>", result)
+
+    def test_format_digest_line_escapes_html_entities(self) -> None:
+        line = "Use <script>alert('xss')</script> carefully"
+        result = _format_digest_line_as_html(line)
+        self.assertNotIn("<script>", result)
+        self.assertIn("&lt;script&gt;", result)
 
 
 if __name__ == "__main__":

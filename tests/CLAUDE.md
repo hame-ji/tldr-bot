@@ -1,8 +1,8 @@
 # tests/
 
 Last-Reviewed-Date: 2026-05-31
-Last-Reviewed-Commit: d2177d2
-Review-Note: Added test_pipeline_integration.py verifying end-to-end pipeline dict contracts with mocks at HTTP boundary only.
+Last-Reviewed-Commit: 887a39e
+Review-Note: Telegram client tests now cover HTML formatter edge cases (nested markdown, Unicode, long lines, HTML entity escaping).
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

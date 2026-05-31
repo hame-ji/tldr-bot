@@ -1,8 +1,8 @@
 # src/telemetry/
 
 Last-Reviewed-Date: 2026-05-31
-Last-Reviewed-Commit: bf81d01
-Review-Note: Replaced Optional[X] with X | None in run_metrics.py and run_history/models.py for consistent modern type hint style.
+Last-Reviewed-Commit: 09d0004
+Review-Note: Extracted shared _log_parsing.extract_payload helper used by both pipeline_log_parser.py and scripts/extract_processed_urls.py, eliminating code duplication.
 
 - `run_metrics.py`: frozen `RunMetrics` dataclass emitted as `run_metrics:` JSON log line. `metrics_version=1`.
 - `pipeline_log_parser.py`: extracts `run_outcome:` and `run_metrics:` from pipeline stdout. Tolerant on missing metrics (fills "unknown"). Used by CI to set workflow outputs.

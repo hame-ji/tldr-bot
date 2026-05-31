@@ -1,8 +1,8 @@
 # .github/ and scripts/
 
-Last-Reviewed-Date: 2026-04-07
-Last-Reviewed-Commit: 4853f3d
-Review-Note: Replay queue rewrites are atomic and malformed pending filenames are skipped without aborting recovery.
+Last-Reviewed-Date: 2026-05-31
+Last-Reviewed-Commit: 09d0004
+Review-Note: scripts/extract_processed_urls.py now imports extract_payload from src/telemetry/_log_parsing.py, eliminating duplicated parsing logic.
 
 - `ci.yml`: runs `unittest discover` on push/PR. Python 3.11 + uv. No secrets needed.
 - `digest.yml`: daily 7am UTC cron + manual trigger. Validates Telegram creds, runs pipeline via `uv run python -m src`, extracts outputs in a separate module step, and treats telemetry/history failures as non-blocking while skipping empty-day commits.

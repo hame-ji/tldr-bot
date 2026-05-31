@@ -1,8 +1,8 @@
 # src/
 
-Last-Reviewed-Date: 2026-04-07
-Last-Reviewed-Commit: 0d01b08
-Review-Note: Summarize batches keep diagnostics accurate on noop paths, and enforce mode preserves article overlap while keeping NotebookLM serial auth containment.
+Last-Reviewed-Date: 2026-05-31
+Last-Reviewed-Commit: d2177d2
+Review-Note: extract_urls now validates URL scheme (http/https only) as defense-in-depth against non-web schemes.
 
 Covers `src/` except `src/summarization/` and `src/telemetry/` (routed separately).
 

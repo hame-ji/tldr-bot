@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from src.telegram_client import chunk_text_by_paragraph, extract_urls, load_offset, poll_urls, save_offset, send_digest
+from src.telegram_client import _is_safe_url_scheme, chunk_text_by_paragraph, extract_urls, load_offset, poll_urls, save_offset, send_digest
 
 
 class TelegramClientTests(unittest.TestCase):
@@ -18,6 +18,19 @@ class TelegramClientTests(unittest.TestCase):
             extract_urls(text),
             ["https://a.example/test", "https://b.example/ok"],
         )
+
+    def test_extract_urls_rejects_non_http_schemes(self) -> None:
+        self.assertEqual(extract_urls("file:///etc/passwd"), [])
+        self.assertEqual(extract_urls("ftp://files.example.com/data"), [])
+
+    def test_is_safe_url_scheme_allows_http_and_https(self) -> None:
+        self.assertTrue(_is_safe_url_scheme("http://example.com"))
+        self.assertTrue(_is_safe_url_scheme("https://example.com"))
+
+    def test_is_safe_url_scheme_rejects_other_schemes(self) -> None:
+        self.assertFalse(_is_safe_url_scheme("file:///etc/passwd"))
+        self.assertFalse(_is_safe_url_scheme("ftp://files.example.com"))
+        self.assertFalse(_is_safe_url_scheme("javascript:alert(1)"))
 
     def test_state_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:

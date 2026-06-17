@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from collections.abc import Iterable
 from typing import Any
@@ -169,8 +170,17 @@ def fetch_url(url: str, failed_base_dir: str = "data/failed") -> dict[str, Any]:
     return {"status": "ok", "kind": "article", "url": url, "content": content}
 
 
-def fetch_urls(urls: Iterable[str], failed_base_dir: str = "data/failed") -> list[dict[str, Any]]:
-    results: list[dict[str, Any]] = []
-    for url in urls:
-        results.append(fetch_url(url, failed_base_dir=failed_base_dir))
-    return results
+def fetch_urls(
+    urls: Iterable[str],
+    failed_base_dir: str = "data/failed",
+    max_workers: int = 3,
+) -> list[dict[str, Any]]:
+    url_list = list(urls)
+    if not url_list:
+        return []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = [
+            executor.submit(fetch_url, url, failed_base_dir=failed_base_dir)
+            for url in url_list
+        ]
+        return [future.result() for future in futures]

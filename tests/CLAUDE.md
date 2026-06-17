@@ -1,8 +1,8 @@
 # tests/
 
-Last-Reviewed-Date: 2026-05-12
-Last-Reviewed-Commit: d182cea
-Review-Note: NotebookLM preflight tests cover auth-like ValueError classification separately from non-auth backend failures.
+Last-Reviewed-Date: 2026-05-31
+Last-Reviewed-Commit: d2f5a24
+Review-Note: Run history tests now verify metrics caching behavior (cache hit skips download, cache miss triggers download and write).
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

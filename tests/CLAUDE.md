@@ -1,8 +1,8 @@
 # tests/
 
-Last-Reviewed-Date: 2026-05-12
-Last-Reviewed-Commit: d182cea
-Review-Note: NotebookLM preflight tests cover auth-like ValueError classification separately from non-auth backend failures.
+Last-Reviewed-Date: 2026-05-31
+Last-Reviewed-Commit: 887a39e
+Review-Note: Telegram client tests now cover HTML formatter edge cases (nested markdown, Unicode, long lines, HTML entity escaping).
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

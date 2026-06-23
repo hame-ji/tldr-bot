@@ -94,5 +94,23 @@ class DigestGeneratorTests(unittest.TestCase):
             self.assertIn("timeout", text)
 
 
+    def test_summary_containing_double_braces_is_not_corrupted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prompt_path = Path(tmpdir) / "digest.txt"
+            prompt_path.write_text("{{summaries}}\n", encoding="utf-8")
+
+            summary_file = Path(tmpdir) / "summary.md"
+            summary_file.write_text("Use {{name}} for templates", encoding="utf-8")
+
+            result = generate_digest(
+                items=[{"status": "ok", "url": "https://example.com/a", "summary_path": str(summary_file)}],
+                run_date=date(2026, 3, 15),
+                prompt_path=str(prompt_path),
+                digests_base_dir=tmpdir,
+            )
+
+            self.assertIn("Use {{name}} for templates", result["digest_text"])
+
+
 if __name__ == "__main__":
     unittest.main()

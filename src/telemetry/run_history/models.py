@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -10,17 +9,17 @@ class RunHistorySnapshot:
     run_number: int
     digest_date: str
     status: str
-    processed_urls: Optional[int]
-    pipeline_seconds: Optional[float]
-    seconds_per_processed_url: Optional[float]
-    fetch_failed_count: Optional[int]
+    processed_urls: int | None
+    pipeline_seconds: float | None
+    seconds_per_processed_url: float | None
+    fetch_failed_count: int | None
     metrics_available: bool
 
 
 @dataclass(frozen=True)
 class PerformanceSummaryRow:
     snapshot: RunHistorySnapshot
-    delta_sec_per_url: Optional[float]
+    delta_sec_per_url: float | None
 
 
 @dataclass(frozen=True)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping
 
 
 @dataclass(frozen=True)
@@ -22,7 +22,7 @@ class RunMetrics:
     notebooklm_auth_failure_count: int
     replay_queued_count: int
     pipeline_seconds: float
-    seconds_per_processed_url: Optional[float]
+    seconds_per_processed_url: float | None
 
 
 def build_run_metrics(
@@ -59,7 +59,7 @@ def build_run_metrics(
     notebooklm_auth_failure_count = int(outcome.get("notebooklm_auth_failure_count", 0))
     replay_queued_count = int(outcome.get("replay_queued_count", 0))
 
-    seconds_per_processed_url: Optional[float]
+    seconds_per_processed_url: float | None
     if processed_urls > 0:
         seconds_per_processed_url = pipeline_seconds / processed_urls
     else:

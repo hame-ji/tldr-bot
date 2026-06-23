@@ -1,8 +1,8 @@
 # .github/ and scripts/
 
-Last-Reviewed-Date: 2026-04-07
-Last-Reviewed-Commit: 4853f3d
-Review-Note: Replay queue rewrites are atomic and malformed pending filenames are skipped without aborting recovery.
+Last-Reviewed-Date: 2026-05-31
+Last-Reviewed-Commit: 09f542d
+Review-Note: digest.yml now uses scripts/commit_strategy.py to decide skip/create/amend, enabling same-day re-run amend instead of duplicate commits.
 
 - `ci.yml`: runs `unittest discover` on push/PR. Python 3.11 + uv. No secrets needed.
 - `digest.yml`: daily 7am UTC cron + manual trigger. Validates Telegram creds, runs pipeline via `uv run python -m src`, extracts outputs in a separate module step, and treats telemetry/history failures as non-blocking while skipping empty-day commits.

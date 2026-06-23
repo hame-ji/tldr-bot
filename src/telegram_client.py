@@ -34,7 +34,10 @@ def load_offset(state_path: str | Path = "state.json") -> int | None:
 def save_offset(offset: int, state_path: str | Path = "state.json") -> None:
     path = Path(state_path)
     payload = {"telegram_offset": offset}
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    content = json.dumps(payload, indent=2) + "\n"
+    temp_path = path.with_suffix(".tmp")
+    temp_path.write_text(content, encoding="utf-8")
+    temp_path.replace(path)
 
 
 def extract_urls(text: str) -> list[str]:
@@ -159,7 +162,11 @@ def send_digest(
     digest_text: str,
     parse_mode: str = "HTML",
     max_chunk_length: int = 4096,
+    max_retries: int = 3,
+    retry_backoff_seconds: float = 5.0,
 ) -> list[dict[str, Any]]:
+    import time
+
     sections = _split_digest_sections(digest_text)
     responses: list[dict[str, Any]] = []
 
@@ -177,9 +184,31 @@ def send_digest(
             }
             if parse_mode:
                 body["parse_mode"] = parse_mode
-            responses.append(_telegram_api(bot_token, "sendMessage", body, post=True))
+            response = _send_with_retry(
+                bot_token, body, max_retries=max_retries, backoff_seconds=retry_backoff_seconds,
+            )
+            responses.append(response)
 
     return responses
+
+
+def _send_with_retry(
+    bot_token: str,
+    body: dict[str, Any],
+    max_retries: int,
+    backoff_seconds: float,
+) -> dict[str, Any]:
+    import time
+
+    last_exc: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            return _telegram_api(bot_token, "sendMessage", body, post=True)
+        except requests.exceptions.RequestException as exc:
+            last_exc = exc
+            if attempt + 1 < max_retries:
+                time.sleep(backoff_seconds * (attempt + 1))
+    raise last_exc  # type: ignore[misc]
 
 
 def _split_digest_sections(digest_text: str) -> list[str]:

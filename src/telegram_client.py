@@ -41,8 +41,14 @@ def extract_urls(text: str) -> list[str]:
     urls = []
     for match in URL_PATTERN.finditer(text):
         url = match.group(0).rstrip(".,;:!?)]}")
+        if not _is_safe_url_scheme(url):
+            continue
         urls.append(url)
     return urls
+
+
+def _is_safe_url_scheme(url: str) -> bool:
+    return url.startswith(("http://", "https://"))
 
 
 def _telegram_api(

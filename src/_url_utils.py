@@ -14,10 +14,10 @@ YOUTUBE_HOSTS = {
 
 def url_to_slug(url: str, fallback: str = "url") -> str:
     parsed = urlparse(url)
-    slug_seed = (parsed.netloc + parsed.path).strip("/") or fallback
-
     host = (parsed.hostname or "").lower()
+
     if host in YOUTUBE_HOSTS:
+        slug_seed = ("youtube.com" + parsed.path).strip("/") or fallback
         query = parse_qs(parsed.query)
         if host.endswith("youtu.be"):
             video_id = parsed.path.strip("/")
@@ -29,6 +29,12 @@ def url_to_slug(url: str, fallback: str = "url") -> str:
         else:
             digest = hashlib.sha1(url.encode("utf-8")).hexdigest()[:10]
             slug_seed = f"{slug_seed}-{digest}"
+    else:
+        slug_seed = (parsed.netloc + parsed.path).strip("/") or fallback
+        query = parsed.query
+        if query:
+            qhash = hashlib.sha1(query.encode("utf-8")).hexdigest()[:8]
+            slug_seed = slug_seed + "-q" + qhash
 
     return slugify(slug_seed)[:80] or fallback
 

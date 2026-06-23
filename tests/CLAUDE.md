@@ -1,8 +1,8 @@
 # tests/
 
-Last-Reviewed-Date: 2026-05-12
-Last-Reviewed-Commit: d182cea
-Review-Note: NotebookLM preflight tests cover auth-like ValueError classification separately from non-auth backend failures.
+Last-Reviewed-Date: 2026-05-31
+Last-Reviewed-Commit: bee5497
+Review-Note: Added UrlDeduplicationTests covering slug-based filtering against existing data/sources/ files across date subdirectories.
 
 - Framework: `unittest` with `unittest.mock`. No pytest.
 - Mock at I/O boundaries: network, filesystem, environment. Never hit real APIs.

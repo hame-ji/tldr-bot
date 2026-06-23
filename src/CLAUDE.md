@@ -1,8 +1,8 @@
 # src/
 
-Last-Reviewed-Date: 2026-04-07
-Last-Reviewed-Commit: 0d01b08
-Review-Note: Summarize batches keep diagnostics accurate on noop paths, and enforce mode preserves article overlap while keeping NotebookLM serial auth containment.
+Last-Reviewed-Date: 2026-05-31
+Last-Reviewed-Commit: f658f87
+Review-Note: url_to_slug canonicalizes YouTube hosts to youtube.com and uses query hashes for articles so dedup handles alternate YT forms and survives 80-char truncation.
 
 Covers `src/` except `src/summarization/` and `src/telemetry/` (routed separately).
 
